@@ -10,9 +10,8 @@ function request(method,params={}){return new Promise((resolve,reject)=>{const i
 async function call(name,args={}){const r=await request('tools/call',{name,arguments:args});assert(!r.error,JSON.stringify(r));assert.equal(r.result.structuredContent.tool,name,'concurrent calls must retain their own tool identity');return r.result.structuredContent;}
 const delay=ms=>new Promise(r=>setTimeout(r,ms));
 async function main(){
- const init=await request('initialize');assert.equal(init.result.serverInfo.version,'1.6.0');
- await request('resources/read',{uri:'ui://local-workspace/activity-v1.html'});
- const rendered=await call('render_workspace',{path:root});assert.equal(rendered.result.activity.length,0);
+ const init=await request('initialize');assert.equal(init.result.serverInfo.version,'1.7.0');
+ const rendered=await call('read_workspace_activity',{path:root});assert.equal(rendered.result.activity.length,0);
  const started=Date.now();let done=false;
  const long=call('exec_command',{cwd:root,cmd:'printf first; sleep 3; printf last',yield_time_ms:5000}).then(r=>{done=true;return r;});
  await delay(180);
@@ -34,7 +33,7 @@ async function main(){
  await call('read_file',{path:path.join(root,'missing.txt')});
  const scoped=await call('read_workspace_activity',{path:root});assert(!scoped.result.activity.some(x=>x.target.includes('-other/')));assert.equal(scoped.result.plans.length,1);assert(scoped.result.activity.some(x=>x.status==='failed'));assert(scoped.result.activity.some(x=>x.preview&&x.preview.includes('after')));
  const bad=await call('read_workspace_activity',{path:root,viewer_id:'invalid/id'});assert.equal(bad.isError,true);
- assert(log.includes('UI_RESOURCE'));assert(log.includes('UI_CONNECTED'));assert.equal(scoped.result.ui.resource_reads,1);
+ assert(log.includes('UI_CONNECTED'));assert.equal(scoped.result.ui.viewers.length,1);
  console.log('PASS non-consuming snapshots, ordered writes, scoped activity/plans, errors, bounded receipts and UI diagnostics');
 }
 main().catch(e=>{console.error(e);process.exitCode=1;}).finally(async()=>{for(const p of pending.values())clearTimeout(p.timer);child.stdin.end();await new Promise(r=>child.once('exit',r));for(const folder of [root,other]){const resolved=path.resolve(folder);assert(resolved.startsWith(path.resolve(os.tmpdir())+path.sep+'workspace-activity-test-'));fs.rmSync(resolved,{recursive:true,force:true});assert(!fs.existsSync(resolved));}console.log('isolated process exited and test directories removed');});

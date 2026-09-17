@@ -4,7 +4,7 @@
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-green" alt="MIT License"></a>
   <img src="https://img.shields.io/badge/platform-Windows%2010%2F11%20x64-blue" alt="Windows 10/11 x64">
   <img src="https://img.shields.io/badge/.NET%20Framework-4.8-orange" alt=".NET Framework 4.8">
-  <img src="https://img.shields.io/badge/version-1.6.0-brightgreen" alt="v1.6.0">
+  <img src="https://img.shields.io/badge/version-1.7.0-brightgreen" alt="v1.7.0">
 </p>
 
 <p align="center">
@@ -25,10 +25,9 @@
 
 ## 特性一览
 
-- **25 个本地工具**：文件读写、精确编辑、多文件补丁、搜索、命令执行与增量输出、Git 审阅、执行计划。
+- **24 个本地工具**：文件读写、精确编辑、多文件补丁、搜索、命令执行与增量输出、Git 审阅、执行计划。
 - **内嵌实时工作台**：桌面程序首个页签直接嵌入工作台页面（WebView2，随系统 Edge 附带；缺运行时自动回退浏览器），每秒同步，按对话隔离时间线，检查器按调用类型渲染（diff、命令输出、读取正文、搜索命中）。
 - **一体化桌面外壳**：单行工具栏（启动/停止合一、在浏览器打开、更多菜单）+ 四个页签（实时工作台 / 操作记录 / 原始日志 / 连接配置）；操作记录与原始日志为自绘视图，按级别着色、等宽排版、尾随跟随。
-- **ChatGPT 内嵌任务面板**：`render_workspace` 打开的卡片每 2 秒只读刷新，不消耗模型输出。
 - **Codex 风格工作流**：`open_workspace` 读取 AGENTS.md 约定 → `update_plan` 展示计划 → `apply_patch` 预验证后提交多文件补丁。
 - **单文件分发**：.NET Framework 4.8 原生 EXE（WebView2 组件以资源内嵌），只监听 127.0.0.1，不开放远程访问。
 
@@ -71,7 +70,7 @@
 
 ### 4. 在 ChatGPT 中刷新插件
 
-打开 ChatGPT 网页版"设置 → 连接器（Connectors）→ 本地工作区"，滚动到底部"信息"，点击**刷新**（这是开发者连接设置页；应用详情页只有"重新连接"时请进入设置页操作）。成功后操作列表应包含 25 个工具。
+打开 ChatGPT 网页版"设置 → 连接器（Connectors）→ 本地工作区"，滚动到底部"信息"，点击**刷新**（这是开发者连接设置页；应用详情页只有"重新连接"时请进入设置页操作）。成功后操作列表应包含 24 个工具。
 
 ### 5. 验证
 
@@ -79,7 +78,7 @@
 
 > 调用 get_workspace_status 确认连接
 
-应返回 `version: 1.6.0`、`tool_count: 25`、实际程序路径和进程实例 ID。**原始日志**页签会依次出现 `initialize`、`tools/list` 与工具回执——仅"已连接"不能证明 ChatGPT 已刷新工具。
+应返回 `version: 1.7.0`、`tool_count: 24`、实际程序路径和进程实例 ID。**原始日志**页签会依次出现 `initialize`、`tools/list` 与工具回执——仅"已连接"不能证明 ChatGPT 已刷新工具。
 
 ## 怎么用（调用方式）
 
@@ -113,20 +112,14 @@
 
 > **为什么不能全自动归属**：一个隧道 / 进程可能同时服务多个 ChatGPT 对话，而宿主不会传入可区分对话的信号。因此没有 `thread_id` 的调用一律进入"未归属"，系统不会按目录或时间猜测归属——这是刻意的隔离取舍，不是缺陷。要精确隔离，就让每个对话各自登记并带上自己的 `thread_id`。
 
-### ChatGPT 内嵌面板
-
-> 打开实时面板（render_workspace），目录 E:/work/api
-
-面板每 2 秒通过只读 `read_workspace_activity` 刷新当前操作、计划与命令输出；"观察中"表示当前没有工具在跑，不等于任务完成。
-
-## 25 个工具
+## 24 个工具
 
 > 完整的输入参数、类型与返回字段见 [docs/TOOLS.md](docs/TOOLS.md)。下表只按用途归类。
 
 | 用途 | 工具 |
 | --- | --- |
 | 对话登记及工作台直达链接 | `register_conversation` |
-| 持续任务面板与独立活动查询 | `render_workspace`、`read_workspace_activity` |
+| 独立活动查询（对话内文本快照） | `read_workspace_activity` |
 | 工作区约定、计划和多文件补丁 | `open_workspace`、`update_plan`、`apply_patch` |
 | 实际连接、版本与活动诊断 | `get_workspace_status` |
 | 目录、文件属性和搜索 | `list_directory`、`file_info`、`search_files`、`search_text` |
@@ -165,8 +158,7 @@
 
 - 工具描述提供中文调用状态；宿主传入 progressToken 时发送开始/执行中/结束通知，未知总量不显示虚构百分比。
 - 桌面立即记录调用开始，同步等待中每 2 秒记录仍在执行，返回时区分正常与失败。
-- 卡片是否呈现、折叠或显示进度最终取决于宿主；插件不能强制显示模型内部思考，也不能绕过 ChatGPT 工具授权。
-- 宿主提供 `requestDisplayMode` 时内嵌面板显示"保持显示"（画中画）按钮。
+- 对话内的工具回执以文本为准；可视化进度统一在桌面程序的内嵌工作台查看，ChatGPT 内不再挂载卡片面板。
 - 旧版结果卡片保留文本阅读、分页、搜索、diff、会话与图片兼容；停止按钮只停止对应命令树。
 
 ## 从源码构建
@@ -178,7 +170,6 @@ node tests/mcp.test.cjs                      # 协议与工具
 node tests/patch.test.cjs                    # 补丁引擎
 node tests/activity.test.cjs                 # 活动记录
 node tests/dashboard.test.cjs                # 工作台数据
-node --test tests/card.test.cjs              # 聊天卡片
 node --test tests/dashboard-ui.test.cjs      # 真实浏览器 UI 回归
 ```
 
@@ -196,7 +187,7 @@ node --test tests/dashboard-ui.test.cjs      # 真实浏览器 UI 回归
 
 ## 常见问题
 
-**ChatGPT 说它只能读、不能改？** 先让它调用 `get_workspace_status`，核对版本、`tool_count: 25` 与连接状态；再在设置页刷新元数据并新开聊天。不要把旧聊天缓存、旧插件或未运行的服务当成系统权限不足。
+**ChatGPT 说它只能读、不能改？** 先让它调用 `get_workspace_status`，核对版本、`tool_count: 24` 与连接状态；再在设置页刷新元数据并新开聊天。不要把旧聊天缓存、旧插件或未运行的服务当成系统权限不足。
 
 **"已连接"但工具没反应？** 隧道连接 ≠ ChatGPT 已刷新工具。原始日志必须出现 `initialize` 与 `tools/list` 才算打通。
 

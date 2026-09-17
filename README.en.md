@@ -4,7 +4,7 @@
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-green" alt="MIT License"></a>
   <img src="https://img.shields.io/badge/platform-Windows%2010%2F11%20x64-blue" alt="Windows 10/11 x64">
   <img src="https://img.shields.io/badge/.NET%20Framework-4.8-orange" alt=".NET Framework 4.8">
-  <img src="https://img.shields.io/badge/version-1.6.0-brightgreen" alt="v1.6.0">
+  <img src="https://img.shields.io/badge/version-1.7.0-brightgreen" alt="v1.7.0">
 </p>
 
 <p align="center">
@@ -25,9 +25,9 @@ Let ChatGPT work directly on your machine through the **official OpenAI tunnel**
 
 ## Features
 
-- **25 local tools**: file read/write, precise edits, multi-file patches, search, command execution with incremental output, Git review, execution plans.
-- **Standalone live dashboard**: a locally compiled React + shadcn/ui single-page app, synced every second, timelines isolated per conversation, inspector rendered per call type (diffs, command output, file content, search hits).
-- **Embedded ChatGPT task panel**: the `render_workspace` card refreshes read-only every 2 seconds without consuming model output.
+- **24 local tools**: file read/write, precise edits, multi-file patches, search, command execution with incremental output, Git review, execution plans.
+- **Standalone live dashboard**: a locally compiled React + shadcn/ui single-page app, synced every second, timelines isolated per conversation, inspector rendered per call type (diffs, command output, file content, search hits). The desktop app embeds it in its first tab (WebView2; falls back to the browser when the runtime is missing).
+- **One-piece desktop shell**: single-row toolbar (combined start/stop, open in browser, more menu) plus four tabs (workbench / operation log / raw log / connection settings); the log views are owner-drawn with level colors, monospace type and tail-follow.
 - **Codex-style workflow**: `open_workspace` reads AGENTS.md conventions → `update_plan` shows real steps → `apply_patch` pre-validates then applies multi-file patches.
 - **Single-file distribution**: native .NET Framework 4.8 EXE, listens on 127.0.0.1 only, no remote access.
 
@@ -65,7 +65,7 @@ Launch `LocalWorkspace.exe`, paste the Tunnel ID and API Key, click **Start**. S
 
 ### 4. Refresh the plugin in ChatGPT
 
-Open ChatGPT web → **Settings → Connectors → Local Workspace**, scroll to the bottom and click **Refresh** (this is the developer connection page; if the app detail page only shows "Reconnect", use the settings page instead). The action list should then contain all 25 tools.
+Open ChatGPT web → **Settings → Connectors → Local Workspace**, scroll to the bottom and click **Refresh** (this is the developer connection page; if the app detail page only shows "Reconnect", use the settings page instead). The action list should then contain all 24 tools.
 
 ### 5. Verify
 
@@ -73,7 +73,7 @@ In a new chat, say:
 
 > Call get_workspace_status to confirm the connection
 
-It should return `version: 1.6.0`, `tool_count: 25`, the actual executable path and this process's instance ID. The desktop log shows `initialize`, `tools/list` and tool receipts in order — "tunnel connected" alone does not prove ChatGPT refreshed the tools.
+It should return `version: 1.7.0`, `tool_count: 24`, the actual executable path and this process's instance ID. The desktop log shows `initialize`, `tools/list` and tool receipts in order — "tunnel connected" alone does not prove ChatGPT refreshed the tools.
 
 ## Usage (how tools get called)
 
@@ -107,20 +107,14 @@ The tool returns a local thread ID and a direct dashboard link; subsequent calls
 
 > **Why assignment can't be fully automatic**: one tunnel/process can serve several ChatGPT conversations at once, and the host passes no signal that distinguishes them. So calls without a `thread_id` land in "Unassigned" and are never guessed into a thread by directory or time — a deliberate isolation tradeoff, not a gap. For precise isolation, register each conversation and pass its own `thread_id`.
 
-### Embedded ChatGPT panel
-
-> Open the live panel (render_workspace) for E:/work/api
-
-The panel refreshes current operations, plans and command output read-only every 2 seconds. "Watching" means no tool is running right now — it does not mean the task is finished.
-
-## The 25 tools
+## The 24 tools
 
 > Full input parameters, types and return fields are in [docs/TOOLS.md](docs/TOOLS.md). The table below only groups them by purpose.
 
 | Purpose | Tools |
 | --- | --- |
 | Conversation registration & dashboard deep links | `register_conversation` |
-| Persistent task panel & standalone activity queries | `render_workspace`, `read_workspace_activity` |
+| Standalone activity queries (textual snapshot in chat) | `read_workspace_activity` |
 | Workspace conventions, plans & multi-file patches | `open_workspace`, `update_plan`, `apply_patch` |
 | Connection, version & activity diagnostics | `get_workspace_status` |
 | Directories, file metadata & search | `list_directory`, `file_info`, `search_files`, `search_text` |
@@ -156,8 +150,7 @@ Old running instances only have the embedded page: observe them read-only via `n
 
 - Tool descriptions carry Chinese call-state text; when the host passes a progressToken, start/heartbeat/finish notifications are sent — unknown totals never show fake percentages.
 - The desktop logs call starts immediately, records still-running calls every 2 seconds, and distinguishes results from failures.
-- Whether cards render, collapse or show progress ultimately depends on the host; the plugin cannot force-display model thinking or bypass ChatGPT tool authorization.
-- When the host provides `requestDisplayMode`, the embedded panel shows a "keep visible" (picture-in-picture) button.
+- Chat receipts stay textual; visual progress lives in the desktop app's embedded workbench — no card panel is mounted inside ChatGPT anymore.
 - Legacy result cards keep text reading, pagination, search, diffs, sessions and image compatibility; stop buttons only kill the corresponding command tree.
 
 ## Build from source
@@ -169,7 +162,6 @@ node tests/mcp.test.cjs                      # protocol & tools
 node tests/patch.test.cjs                    # patch engine
 node tests/activity.test.cjs                 # activity store
 node tests/dashboard.test.cjs                # dashboard data
-node --test tests/card.test.cjs              # chat cards
 node --test tests/dashboard-ui.test.cjs      # real-browser UI regression
 ```
 
@@ -187,7 +179,7 @@ Verification records: [VERIFICATION.md](VERIFICATION.md). Upgrade notes: [UPGRAD
 
 ## Troubleshooting
 
-**ChatGPT claims it can only read?** Have it call `get_workspace_status` and check version, `tool_count: 25` and connection; then refresh metadata in settings and open a new chat. Don't blame OS permissions for stale chat caches, old plugin versions or a service that isn't running.
+**ChatGPT claims it can only read?** Have it call `get_workspace_status` and check version, `tool_count: 24` and connection; then refresh metadata in settings and open a new chat. Don't blame OS permissions for stale chat caches, old plugin versions or a service that isn't running.
 
 **"Tunnel connected" but tools don't respond?** Tunnel connectivity ≠ ChatGPT refreshed the tools. The desktop log must show `initialize` and `tools/list`.
 

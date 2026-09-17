@@ -10,8 +10,6 @@ static class WorkspaceActivity
     static readonly object Gate=new object();
     static readonly List<Entry> Entries=new List<Entry>();
     static readonly List<Viewer> Viewers=new List<Viewer>();
-    static int resourceReads;
-    static string resourceReadAt;
     public static bool Within(string target,string root) { return string.IsNullOrEmpty(root)||target.Equals(root,StringComparison.OrdinalIgnoreCase)||target.StartsWith(root.TrimEnd('/')+"/",StringComparison.OrdinalIgnoreCase); }
     public static string Begin(string tool,string target,string thread="unassigned")
     {
@@ -27,7 +25,6 @@ static class WorkspaceActivity
         lock(Gate)return Entries.Where(x=>Within(x.Target,path)&&(thread.Length==0||x.ThreadId==thread)).Select(x=>new{thread_id=x.ThreadId,id=x.Id,tool=x.Tool,target=x.Target,status=x.Status,started_at=x.Started.ToString("o"),elapsed_ms=x.Status=="running"?(long)(DateTime.UtcNow-x.Started).TotalMilliseconds:x.Elapsed,error_code=x.Error,preview=receipts?x.Preview:null,detail=x.Detail,session_id=Session(x.Detail)}).ToArray();
     }
     static string Session(Dictionary<string,object> detail){object value;if(detail!=null&&detail.TryGetValue("session_id",out value))return value as string;return null;}
-    public static void ResourceRead(string uri){lock(Gate){resourceReads++;resourceReadAt=DateTime.UtcNow.ToString("o");}Console.Error.WriteLine("[Workspace] UI_RESOURCE | "+uri);}
     public static void Seen(string id,string path,string bridge,string mode)
     {
         if(string.IsNullOrEmpty(id))return;
@@ -38,6 +35,6 @@ static class WorkspaceActivity
     }
     public static object Diagnostics(string path)
     {
-        lock(Gate)return new{resource_reads=resourceReads,last_resource_read_at=resourceReadAt,viewers=Viewers.Where(x=>Within(x.Path,path)).Select(x=>new{viewer_id=x.Id,path=x.Path,bridge=x.Bridge,display_mode=x.Mode,last_seen_at=x.Seen.ToString("o"),reads=x.Reads,active=(DateTime.UtcNow-x.Seen).TotalSeconds<15}).ToArray(),note="资源读取不等于卡片已挂载；UI_CONNECTED 表示卡片已成功发起状态查询。心跳超时也可能是页面隐藏或用户暂停。"};
+        lock(Gate)return new{viewers=Viewers.Where(x=>Within(x.Path,path)).Select(x=>new{viewer_id=x.Id,path=x.Path,bridge=x.Bridge,display_mode=x.Mode,last_seen_at=x.Seen.ToString("o"),reads=x.Reads,active=(DateTime.UtcNow-x.Seen).TotalSeconds<15}).ToArray(),note="UI_CONNECTED 表示有视图正在查询状态；心跳超时也可能是页面隐藏或用户暂停。"};
     }
 }

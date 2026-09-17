@@ -5,10 +5,6 @@ using System.Collections.Generic;
 
 static class Presentation
 {
-    public const string LiveResource="ui://local-workspace/activity-v1.html";
-    public const string Resource="ui://local-workspace/review-v5.html";
-    public static object ResourceList(){return new{resources=new[]{new{uri=LiveResource,name="workspace-activity",title="本地工作区 · 实时活动",mimeType="text/html;profile=mcp-app"}}};}
-    public static object ReadResource(string uri){if(uri!=LiveResource&&uri!=Resource&&uri!="ui://local-workspace/review-v4.html")throw new ArgumentException("Unknown resource");using(var stream=typeof(Presentation).Assembly.GetManifestResourceStream("workspace-card.html"))using(var reader=new StreamReader(stream)){return new{contents=new[]{new{uri=uri,mimeType="text/html;profile=mcp-app",text=reader.ReadToEnd(),_meta=new Dictionary<string,object>{{"ui",new{prefersBorder=true,csp=new{connectDomains=new string[0],resourceDomains=new string[0]}}},{"openai/widgetPrefersBorder",true},{"openai/widgetCSP",new{connect_domains=new string[0],resource_domains=new string[0]}},{"openai/widgetDescription","实时显示工作区当前操作、执行计划、活动记录与命令输出；可暂停更新。"}}}}};}}
     public static string DisplayPath(string path){return path.Replace('\\','/');}
     public static object Diff(string before,string after)
     {
