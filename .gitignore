@@ -1,0 +1,16 @@
+# 依赖与构建产物
+node_modules/
+dist/
+dist-next/
+work/
+
+# 本地临时文件
+*.log
+*.tmp
+.DS_Store
+Thumbs.db
+
+# 密钥与本地配置（绝不提交）
+.env
+.env.local
+settings.json

@@ -1,0 +1,3 @@
+const http=require('http'),fs=require('fs'),path=require('path');
+const files={'/':path.join(__dirname,'card-host.html'),'/legacy':path.join(__dirname,'legacy-card-host.html'),'/card':path.join(__dirname,'../src/workspace-card.html')};
+const server=http.createServer((req,res)=>{if(!files[req.url]){res.writeHead(404);return res.end();}res.setHeader('Cache-Control','no-store');res.setHeader('Content-Type','text/html; charset=utf-8');res.end(fs.readFileSync(files[req.url]));});server.listen(Number(process.env.PREVIEW_PORT||0),'127.0.0.1',()=>console.log('isolated card preview: http://127.0.0.1:'+server.address().port));
