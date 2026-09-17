@@ -1,3 +1,16 @@
+# 2.0.0 升级说明
+
+2026-09-18。对照 MCP 2026-07-28 规范的协议大版本：升级为 dual-era 服务器，legacy（ChatGPT Tunnel）路径零回归。
+
+- **Modern 时代（2026-07-28）协议入口**：请求 `_meta` 携带 `io.modelcontextprotocol/protocolVersion` 即按无状态 modern 语义处理；新增 `server/discover`（supportedVersions / capabilities / instructions / serverInfo，可缓存）；所有 modern 结果带必填 `resultType:"complete"` 与 `_meta` 中的 `serverInfo` 回执标识；版本不匹配返回 -32022（UnsupportedProtocolVersionError），缺 clientCapabilities 返回 -32021；modern 时代按规范不再响应 `ping`。
+- **可缓存 tools/list**：modern `tools/list` 附带 CacheableResult 必填字段 `ttlMs:300000` 与 `cacheScope:"private"`；capabilities 增加 `extensions` 字段。
+- **MRTR 危险操作确认**：modern 客户端声明 `elicitation` 能力时，`apply_patch` 与覆盖已有文件的 `write_file` 先返回 `resultType:"input_required"` + `elicitation/create`（form 模式）；客户端带 `inputResponses` 与原样参数重试后才执行。`requestState` 为 HMAC-SHA256 签名的 base64url 载荷，绑定工具名 + 参数 SHA-256 指纹，10 分钟过期、nonce 一次性消费；篡改 / 改参 / 过期 / 重放均拒绝（CONFIRM_STATE_INVALID），decline 返回 CONFIRM_DECLINED 且不改文件。
+- **Tasks 扩展（io.modelcontextprotocol/tasks）**：modern 客户端声明该扩展时，yield 窗口内未结束的 `exec_command` 返回 `resultType:"task"` 标准句柄（taskId 复用会话 ID，`pollIntervalMs:1000`、`ttlMs:3600000`）；`tasks/get` 轮询（working / completed 携带完整 CallToolResult / cancelled），`tasks/cancel` 协作式终止进程树，`tasks/update` 空确认；未声明扩展的客户端保持经典 `session_id` 会话结果。
+- **OpenTelemetry trace 关联**：读取请求 `_meta.traceparent`（截断 200 字符）写入操作日志，工作台检查器元信息行显示 trace 短 ID；快照 activity 条目新增 `trace` 字段。
+- **工具图标**：24 个工具全部附带 `icons`（16×16 内嵌 SVG data URI，按终端 / Git / 搜索 / 写入 / 工作区 / 读取六类配色），宿主 UI 可渲染。
+- **诊断**：`get_workspace_status` 新增 `protocol_versions` 字段，明示双时代支持。
+- **测试**：新增 `tests/modern.test.cjs`（discover、版本协商错误、resultType/缓存字段、icons、trace 记录、MRTR 全链路含篡改/改参/decline/重放、Tasks 生命周期、legacy 回退零回归）；全量 16 项测试通过。
+
 # 1.7.0 升级说明
 
 2026-09-17。桌面程序重绘 + 实时工作台内嵌 + ChatGPT 卡片下线；工具数 25 → 24。

@@ -4,7 +4,7 @@
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-green" alt="MIT License"></a>
   <img src="https://img.shields.io/badge/platform-Windows%2010%2F11%20x64-blue" alt="Windows 10/11 x64">
   <img src="https://img.shields.io/badge/.NET%20Framework-4.8-orange" alt=".NET Framework 4.8">
-  <img src="https://img.shields.io/badge/version-1.7.0-brightgreen" alt="v1.7.0">
+  <img src="https://img.shields.io/badge/version-2.0.0-brightgreen" alt="v2.0.0">
 </p>
 
 <p align="center">
@@ -26,6 +26,7 @@ Let ChatGPT work directly on your machine through the **official OpenAI tunnel**
 ## Features
 
 - **24 local tools**: file read/write, precise edits, multi-file patches, search, command execution with incremental output, Git review, execution plans.
+- **Dual-era MCP protocol (v2.0)**: one EXE serves both legacy 2025-06-18 clients (`initialize` handshake — what the ChatGPT Tunnel uses today, behaviour unchanged) and modern [2026-07-28](https://modelcontextprotocol.io/specification/2026-07-28) stateless clients: `server/discover`, per-request `_meta` version negotiation, `resultType`, cacheable `tools/list` (`ttlMs`/`cacheScope`), MRTR confirmations for destructive operations, the official Tasks extension for long-running commands, OpenTelemetry trace correlation and tool icons.
 - **Standalone live dashboard**: a locally compiled React + shadcn/ui single-page app, synced every second, timelines isolated per conversation, inspector rendered per call type (diffs, command output, file content, search hits). The desktop app embeds it in its first tab (WebView2; falls back to the browser when the runtime is missing).
 - **One-piece desktop shell**: single-row toolbar (combined start/stop, open in browser, more menu) plus four tabs (workbench / operation log / raw log / connection settings); the log views are owner-drawn with level colors, monospace type and tail-follow.
 - **Codex-style workflow**: `open_workspace` reads AGENTS.md conventions → `update_plan` shows real steps → `apply_patch` pre-validates then applies multi-file patches.
@@ -73,7 +74,7 @@ In a new chat, say:
 
 > Call get_workspace_status to confirm the connection
 
-It should return `version: 1.7.0`, `tool_count: 24`, the actual executable path and this process's instance ID. The desktop log shows `initialize`, `tools/list` and tool receipts in order — "tunnel connected" alone does not prove ChatGPT refreshed the tools.
+It should return `version: 2.0.0`, `tool_count: 24`, `protocol_versions`, the actual executable path and this process's instance ID. The desktop log shows `initialize`, `tools/list` and tool receipts in order — "tunnel connected" alone does not prove ChatGPT refreshed the tools.
 
 ## Usage (how tools get called)
 
@@ -195,12 +196,30 @@ Verification records: [VERIFICATION.md](VERIFICATION.md). Upgrade notes: [UPGRAD
 - `settings.json` contains your API key — never commit, screenshot or share it.
 - Service and activity records live in the current process; reconnect and re-register after restarts.
 
+## Protocol compatibility
+
+The server is a **dual-era** implementation: it picks its behaviour from how the client opens, and the two paths never interfere.
+
+| Era | Trigger | What you get |
+| --- | --- | --- |
+| legacy (2025-06-18) | `initialize` handshake (what the ChatGPT Tunnel uses today) | Identical to 1.7.0: 24 tools, progress notifications, structured output |
+| modern ([2026-07-28](https://modelcontextprotocol.io/specification/2026-07-28)) | request `_meta` carries `io.modelcontextprotocol/protocolVersion` | Stateless per-request negotiation, `server/discover`, `resultType`, cacheable `tools/list` (`ttlMs`/`cacheScope: private`), `serverInfo` on every result |
+
+Modern-era features activate progressively from the capabilities the client declares:
+
+- **MRTR confirmations for destructive operations**: when the client declares `elicitation`, `apply_patch` and `write_file` overwriting an existing file first return `resultType: "input_required"` with an `elicitation/create` request; the write only happens when the client retries with `inputResponses` + `requestState`. `requestState` is HMAC-SHA256 integrity-protected, bound to the tool name and an argument fingerprint, expires after 10 minutes and is single-use (tamper- and replay-resistant). Clients without the capability see unchanged behaviour.
+- **Tasks extension (`io.modelcontextprotocol/tasks`)**: when the client declares the extension, an `exec_command` still running at yield time returns a standard task handle (`resultType: "task"`) pollable via `tasks/get` and cancellable via `tasks/cancel`; clients without it keep the classic `session_id` result.
+- **OpenTelemetry**: `traceparent` from request `_meta` is journaled with each call, and the dashboard inspector shows the short trace id for correlation with host-side traces.
+- Version mismatches return `UnsupportedProtocolVersionError` (-32022); per spec, the modern era no longer answers `ping`.
+
 ## Official references
 
 - [OpenAI Apps SDK Quickstart (Developer Mode & connector creation)](https://developers.openai.com/apps-sdk/quickstart/)
 - [OpenAI MCP Apps UI & bridging](https://developers.openai.com/plugins/build/chatgpt-ui)
 - [Tool metadata, output structure & annotations](https://developers.openai.com/plugins/reference#tool-descriptor-parameters)
 - [MCP progress notifications](https://modelcontextprotocol.io/specification/2025-06-18/basic/utilities/progress)
+- [MCP 2026-07-28 specification (modern-era basis)](https://modelcontextprotocol.io/specification/2026-07-28)
+- [MCP Tasks extension](https://modelcontextprotocol.io/extensions/tasks)
 - [DevSpace official source](https://github.com/Waishnav/devspace)
 
 ## License & attribution

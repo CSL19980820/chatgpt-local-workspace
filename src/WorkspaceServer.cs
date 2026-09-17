@@ -18,9 +18,17 @@ static class WorkspaceServer
     [ThreadStatic] internal static string CurrentThread;
     static readonly object CommandsGate=new object();
     static readonly System.Collections.Concurrent.BlockingCollection<Action> Work=new System.Collections.Concurrent.BlockingCollection<Action>(128);
-    public const string Version="1.7.0";
+    public const string Version="2.0.0";
+    // 2026-07-28 modern era: stateless per-request negotiation; the legacy initialize handshake keeps serving 2025-06-18 clients.
+    public const string ModernVersion="2026-07-28";
+    const string PvKey="io.modelcontextprotocol/protocolVersion",CapsKey="io.modelcontextprotocol/clientCapabilities",ServerInfoKey="io.modelcontextprotocol/serverInfo",TasksExt="io.modelcontextprotocol/tasks";
     public static int ToolCount {get{return Tools().Length;}}
     static readonly string InstanceId=Guid.NewGuid().ToString("N");
+    static readonly object ServerInfo=new{name="local-workspace",version=Version};
+    static readonly object LegacyCapabilities=new{tools=new{listChanged=false}};
+    static readonly byte[] StateKey=System.Security.Cryptography.SHA256.Create().ComputeHash(Encoding.UTF8.GetBytes("local-workspace-request-state:"+InstanceId));
+    static readonly System.Collections.Concurrent.ConcurrentDictionary<string,byte> UsedNonces=new System.Collections.Concurrent.ConcurrentDictionary<string,byte>();
+    static readonly string Instructions="FIRST call register_conversation with the workspace path; the title is optional and auto-derived from the directory name if omitted. Include actual chat_id only if known. Tell the user the title and returned dashboard_url before work; the local desktop app embeds that dashboard and observes every tool, plan and command automatically, so never try to render a visual panel inside ChatGPT. Pass returned thread_id on every tool call. Never attach another chat to a remembered global thread. Omitted calls appear as unassigned. Windows local workspace with read, write, edit, search, native image reading, Git inspection and hidden Git Bash execution by default; explicitly select shell=powershell or shell=pwsh for PowerShell syntax. Begin with open_workspace to read scoped project guidance, discover shells and inspect the current plan. Use update_plan for multi-step work and apply_patch for reviewed multi-file changes. get_workspace_status verifies the actual server and available tools. Commands accept cmd/cwd/yield_time_ms; write_stdin continues sessions or sends input, and never re-runs the command. This is a local execution harness, not a model runtime or PTY. All local drives are available subject to OS permissions. Discover roots using list_directory with an empty path. Prefer returned forward-slash absolute paths; never insert Markdown escape backslashes before underscores. Inspect isError, exit_code and timed_out: an error is not success, a running session is not completion. Poll command sessions instead of re-running commands. read_command provides a non-consuming output snapshot; poll_command consumes only incremental output. Read AGENTS.md before changing a project. show_changes excludes shell/external changes; use git_status and git_diff for Git changes. Search partial/skip flags must not be interpreted as exhaustive results. Some hosts may filter tool discovery. Text results remain authoritative. Never claim the server is read-only merely because a host omits tools; report the visible tool names and try get_workspace_status when available. Report actual work progress and concrete failures to the user; do not claim changes without tool receipts.";
     static readonly object OutputGate=new object();
     static string S(Dictionary<string, object> a, string k, string fallback = "") { object v; if(!a.TryGetValue(k,out v))return fallback;if(!(v is string))throw new ArgumentException(k+" must be a string");return (string)v; }
     static string Alias(Dictionary<string,object> a,string key,string legacy,string fallback=""){if(a.ContainsKey(key)&&a.ContainsKey(legacy)&&S(a,key)!=S(a,legacy))throw new ArgumentException(key+" and "+legacy+" conflict; provide one");return a.ContainsKey(key)?S(a,key):S(a,legacy,fallback);}
@@ -37,13 +45,30 @@ static class WorkspaceServer
     static object Tool(string name, string description, bool read, Dictionary<string, object> properties, params string[] required)
     {
         properties["thread_id"]=Schema("string","Local conversation ID returned by register_conversation. Include on every call; omitted calls are explicitly unassigned, never attached to another conversation.");
-        return new { name = name, title=Title(name), description = description+" Use absolute Windows workspace paths with forward slashes; patch file paths are relative to cwd.", inputSchema = new { type = "object", properties = properties, required = required, additionalProperties = false }, outputSchema=new{type="object",properties=new{tool=new{type="string"},result=new{type="object"},isError=new{type="boolean"}},required=new[]{"tool","result","isError"},additionalProperties=false}, annotations = new { readOnlyHint = read, destructiveHint = !read&&name!="register_conversation"&&name!="create_directory"&&name!="update_plan", idempotentHint = read||name=="create_directory"||name=="stop_command"||name=="update_plan", openWorldHint = name=="exec_command"||name=="write_stdin" }, _meta=ToolMeta(name) };
+        return new { name = name, title=Title(name), icons=new[]{new{src=IconFor(name),mimeType="image/svg+xml",sizes=new[]{"16x16"}}}, description = description+" Use absolute Windows workspace paths with forward slashes; patch file paths are relative to cwd.", inputSchema = new { type = "object", properties = properties, required = required, additionalProperties = false }, outputSchema=new{type="object",properties=new{tool=new{type="string"},result=new{type="object"},isError=new{type="boolean"}},required=new[]{"tool","result","isError"},additionalProperties=false}, annotations = new { readOnlyHint = read, destructiveHint = !read&&name!="register_conversation"&&name!="create_directory"&&name!="update_plan", idempotentHint = read||name=="create_directory"||name=="stop_command"||name=="update_plan", openWorldHint = name=="exec_command"||name=="write_stdin" }, _meta=ToolMeta(name) };
     }
     static object ToolMeta(string name)
     {
         var meta=new Dictionary<string,object>{{"openai/widgetAccessible",true},{"openai/toolInvocation/invoking",Title(name)+"…"},{"openai/toolInvocation/invoked",Title(name)+"已返回"}};
         meta["ui"]=new{visibility=new[]{"model","app"}};
         return meta;
+    }
+    // Tool icons are embedded as data URIs: the server is loopback-only and ships no static assets.
+    static string IconFor(string name)
+    {
+        string[] terminal={"exec_command","poll_command","write_stdin","list_commands","read_command","stop_command"};
+        string[] git={"git_status","git_diff","show_changes"};
+        string[] search={"search_files","search_text"};
+        string[] write={"write_file","edit_file","create_directory","apply_patch"};
+        string[] workspace={"register_conversation","open_workspace","update_plan","read_workspace_activity","get_workspace_status"};
+        string svg=
+            terminal.Contains(name)?"<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><rect x='1' y='2' width='14' height='12' rx='2' fill='#16a34a'/><path d='M4 6l2.5 2L4 10' stroke='#ffffff' stroke-width='1.4' fill='none'/><rect x='8' y='9.4' width='4' height='1.3' fill='#ffffff'/></svg>"
+            :git.Contains(name)?"<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><circle cx='5' cy='3' r='2' fill='#ea580c'/><circle cx='5' cy='13' r='2' fill='#ea580c'/><circle cx='11' cy='6' r='2' fill='#ea580c'/><path d='M5 5v6' stroke='#ea580c' stroke-width='1.5' fill='none'/><path d='M11 8c0 2.6-2.6 2.9-4 3' stroke='#ea580c' stroke-width='1.4' fill='none'/></svg>"
+            :search.Contains(name)?"<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><circle cx='7' cy='7' r='4.4' stroke='#7c3aed' stroke-width='1.7' fill='none'/><path d='M10.4 10.4L14 14' stroke='#7c3aed' stroke-width='1.9' fill='none'/></svg>"
+            :write.Contains(name)?"<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><path d='M3 1h6l4 4v10H3z' fill='#2563eb'/><path d='M9 1l4 4H9z' fill='#93c5fd'/><rect x='5' y='8' width='6' height='1.2' fill='#ffffff'/><rect x='5' y='10.6' width='4' height='1.2' fill='#ffffff'/></svg>"
+            :workspace.Contains(name)?"<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><rect x='1.5' y='1.5' width='5.5' height='5.5' rx='1' fill='#0891b2'/><rect x='9' y='1.5' width='5.5' height='5.5' rx='1' fill='#67e8f9'/><rect x='1.5' y='9' width='5.5' height='5.5' rx='1' fill='#67e8f9'/><rect x='9' y='9' width='5.5' height='5.5' rx='1' fill='#0891b2'/></svg>"
+            :"<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><path d='M3 1h6l4 4v10H3z' fill='#64748b'/><path d='M9 1l4 4H9z' fill='#cbd5e1'/><rect x='5' y='8' width='6' height='1.2' fill='#ffffff'/><rect x='5' y='10.6' width='6' height='1.2' fill='#ffffff'/><rect x='5' y='13.2' width='3' height='1.2' fill='#ffffff'/></svg>";
+        return "data:image/svg+xml;base64,"+Convert.ToBase64String(Encoding.UTF8.GetBytes(svg));
     }
     static object[] toolsCache;
     static string[] toolNamesCache;
@@ -92,7 +117,7 @@ static class WorkspaceServer
     }
     sealed class Command : IDisposable
     {
-        public Process Process; public string Text,Cwd,Shell,ThreadId;public DateTime Started=DateTime.UtcNow;public DateTime Deadline; public System.Threading.Timer Timeout; public System.Threading.Tasks.Task OutputReader,ErrorReader; public readonly StringBuilder Output = new StringBuilder(),History=new StringBuilder(); public readonly object Gate = new object(); public bool Truncated,HistoryTruncated,TimedOut,Stopped;
+        public Process Process; public string Text,Cwd,Shell,ThreadId;public DateTime Started=DateTime.UtcNow;public DateTime Deadline; public System.Threading.Timer Timeout; public System.Threading.Tasks.Task OutputReader,ErrorReader; public readonly StringBuilder Output = new StringBuilder(),History=new StringBuilder(); public readonly object Gate = new object(); public bool Truncated,HistoryTruncated,TimedOut,Stopped,CancelRequested;
         public void Append(string line){if(line!=null)AppendRaw(line+Environment.NewLine);}
         public void AppendRaw(string text) { lock(Gate) { Output.Append(text);History.Append(text); if (Output.Length > 128000) { Output.Remove(0, Output.Length - 128000); Truncated = true; }if(History.Length>128000){History.Remove(0,History.Length-128000);HistoryTruncated=true;} } }
         public async System.Threading.Tasks.Task Pump(StreamReader reader){char[] buffer=new char[4096];int count;try{while((count=await reader.ReadAsync(buffer,0,buffer.Length))>0)AppendRaw(new string(buffer,0,count));}catch(ObjectDisposedException){}catch(IOException ex){AppendRaw("\n[output stream error] "+ex.Message+"\n");}}
@@ -136,7 +161,7 @@ static class WorkspaceServer
             return Result(registration);
         }
         if(name=="read_workspace_activity")return Result(LiveSnapshot(a));
-        if(name=="get_workspace_status")return Result(new{version=Version,default_shell=WorkspaceContext.DefaultShell,instance_id=InstanceId,dashboard_url=LocalDashboard.Url,conversations=WorkspaceThreads.List(),executable=Presentation.DisplayPath(System.Windows.Forms.Application.ExecutablePath),tool_count=ToolCount,tools=ToolNames(),running_commands=Commands.Count(x=>!x.Value.Process.HasExited),activity=WorkspaceActivity.Read(""),plans=WorkspaceContext.AllPlans(),ui=WorkspaceActivity.Diagnostics(""),scope="当前 MCP 进程；其他连接、过去进程和模型思考不可见。若工具缺失，请刷新宿主工具元数据并核对实际连接。"});
+        if(name=="get_workspace_status")return Result(new{version=Version,protocol_versions=new[]{"2025-06-18 (legacy initialize)","2026-07-28 (modern stateless: server/discover, MRTR, tasks extension)"},default_shell=WorkspaceContext.DefaultShell,instance_id=InstanceId,dashboard_url=LocalDashboard.Url,conversations=WorkspaceThreads.List(),executable=Presentation.DisplayPath(System.Windows.Forms.Application.ExecutablePath),tool_count=ToolCount,tools=ToolNames(),running_commands=Commands.Count(x=>!x.Value.Process.HasExited),activity=WorkspaceActivity.Read(""),plans=WorkspaceContext.AllPlans(),ui=WorkspaceActivity.Diagnostics(""),scope="当前 MCP 进程；其他连接、过去进程和模型思考不可见。若工具缺失，请刷新宿主工具元数据并核对实际连接。"});
         if(name=="open_workspace")return Result(WorkspaceContext.Open(Full(S(a,"path"),true)));
         if(name=="update_plan"){object plan;if(!a.TryGetValue("plan",out plan))throw new ArgumentException("plan is required");return Result(WorkspaceContext.Update(Full(S(a,"path")),plan,S(a,"explanation")));}
         if(name=="apply_patch")return Result(PatchEditor.Apply(Full(S(a,"cwd")),S(a,"patch")));
@@ -205,7 +230,7 @@ static class WorkspaceServer
         lock(CommandsGate){var selected=Commands.Where(x=>WorkspaceActivity.Within(Presentation.DisplayPath(x.Value.Cwd).TrimEnd('/'),path)&&(thread.Length==0||x.Value.ThreadId==thread)).OrderBy(x=>x.Value.Process.HasExited).ThenByDescending(x=>x.Value.Started).ToArray();omitted=Math.Max(0,selected.Length-8);foreach(var pair in selected.Take(8)){var c=pair.Value;lock(c.Gate){bool done=c.Process.HasExited;string output=c.History.ToString();commands.Add(new{thread_id=c.ThreadId,started_at=c.Started.ToString("o"),session_id=pair.Key,command=c.Text,cwd=Presentation.DisplayPath(c.Cwd),shell=c.Shell,running=!done,exit_code=done?(int?)c.Process.ExitCode:null,elapsed_seconds=Math.Round(((done?c.Process.ExitTime.ToUniversalTime():DateTime.UtcNow)-c.Started).TotalSeconds,1),output=output.Substring(Math.Max(0,output.Length-8000)),truncated=c.HistoryTruncated||output.Length>8000,timed_out=c.TimedOut,stopped=c.Stopped});}}}
         return new{version=Version,instance_id=InstanceId,dashboard_url=LocalDashboard.Url,conversations=WorkspaceThreads.List(),thread_id=thread,path=path,checked_at=DateTime.UtcNow.ToString("o"),default_shell=WorkspaceContext.DefaultShell,activity=WorkspaceActivity.Read(path,thread,!local),plans=WorkspaceContext.PlansWithin(path,thread),commands=commands,omitted_commands=omitted,queued_calls=Work.Count,ui=WorkspaceActivity.Diagnostics(path),scope="仅当前 MCP 进程与此目录及子目录。没有工具调用不代表模型已完成；模型思考不可见。历史上限 100 条，命令输出为尾部快照；每条调用附带有界的结构化详情。"};
     }
-    static object RunCall(Dictionary<string,object> p,StreamWriter output)
+    static object RunCall(Dictionary<string,object> p,StreamWriter output,string trace)
     {
         string name=S(p,"name");CurrentTool=name;var args=p.ContainsKey("arguments")?(Dictionary<string,object>)p["arguments"]:new Dictionary<string,object>();
         string target=args.ContainsKey("path")?Convert.ToString(args["path"]):args.ContainsKey("cwd")?Convert.ToString(args["cwd"]):args.ContainsKey("session_id")?Convert.ToString(args["session_id"]):"";
@@ -213,7 +238,7 @@ static class WorkspaceServer
         if(name=="register_conversation")return Call(name,args);
         if(args.ContainsKey("session_id")){Command owner;if(Commands.TryGetValue(S(args,"session_id"),out owner)){target=owner.Cwd;if(args.ContainsKey("thread_id")&&CurrentThread!=owner.ThreadId)return Result(new{error_code="THREAD_MISMATCH",message="Command belongs to another conversation"},true);CurrentThread=owner.ThreadId;}}
         string logPrefix="[Workspace] [thread="+CurrentThread+"] ";
-        string activityId=WorkspaceActivity.Begin(name,Presentation.DisplayPath(target).TrimEnd('/'),CurrentThread);
+        string activityId=WorkspaceActivity.Begin(name,Presentation.DisplayPath(target).TrimEnd('/'),CurrentThread,trace);
         var watch=Stopwatch.StartNew();string started=DateTime.UtcNow.ToString("o");object token=null,meta;if(p.TryGetValue("_meta",out meta)&&meta is Dictionary<string,object>)((Dictionary<string,object>)meta).TryGetValue("progressToken",out token);
         bool active=true;int step=0;object progressGate=new object();
         Action<string> progress=message=>{lock(progressGate){if(!active||token==null)return;lock(OutputGate)output.WriteLine(Json.Serialize(new{jsonrpc="2.0",method="notifications/progress",@params=new{progressToken=token,progress=step++,message=message}}));}};
@@ -234,6 +259,114 @@ static class WorkspaceServer
         }
     }
     static void Reply(StreamWriter output,object response){lock(OutputGate)output.WriteLine(Json.Serialize(response));}
+    // ---- MCP 2026-07-28 modern era: stateless per-request negotiation, MRTR confirmations, Tasks extension ----
+    static Dictionary<string,object> ModernWrap(object result)
+    {
+        var dict=Json.Deserialize<Dictionary<string,object>>(Json.Serialize(result));
+        if(!dict.ContainsKey("resultType"))dict["resultType"]="complete";
+        object existing;var meta=new Dictionary<string,object>();
+        if(dict.TryGetValue("_meta",out existing)&&existing is Dictionary<string,object>)meta=(Dictionary<string,object>)existing;
+        meta[ServerInfoKey]=Json.Deserialize<Dictionary<string,object>>(Json.Serialize(ServerInfo));
+        dict["_meta"]=meta;return dict;
+    }
+    static object Discover()
+    {
+        return new{resultType="complete",supportedVersions=new[]{ModernVersion},capabilities=new{tools=new{listChanged=false},extensions=new Dictionary<string,object>{{TasksExt,new{}}}},instructions=Instructions,ttlMs=3600000,cacheScope="private",_meta=new Dictionary<string,object>{{ServerInfoKey,ServerInfo}}};
+    }
+    static string B64Url(byte[] bytes){return Convert.ToBase64String(bytes).TrimEnd('=').Replace('+','-').Replace('/','_');}
+    static byte[] FromB64Url(string text){string s=text.Replace('-','+').Replace('_','/');switch(s.Length%4){case 2:s+="==";break;case 3:s+="=";break;}return Convert.FromBase64String(s);}
+    static byte[] Hmac(byte[] payload){using(var h=new System.Security.Cryptography.HMACSHA256(StateKey))return h.ComputeHash(payload);}
+    static string Fingerprint(Dictionary<string,object> args){var canonical=string.Join("\n",args.Keys.OrderBy(k=>k,StringComparer.Ordinal).Select(k=>k+"="+Convert.ToString(args[k],System.Globalization.CultureInfo.InvariantCulture)));using(var sha=System.Security.Cryptography.SHA256.Create())return BitConverter.ToString(sha.ComputeHash(Encoding.UTF8.GetBytes(canonical))).Replace("-","").ToLowerInvariant();}
+    static string MakeState(string tool,Dictionary<string,object> args)
+    {
+        var payload=new Dictionary<string,object>{{"t",tool},{"f",Fingerprint(args)},{"e",DateTime.UtcNow.AddMinutes(10).Ticks},{"n",Guid.NewGuid().ToString("N")}};
+        byte[] body=Encoding.UTF8.GetBytes(Json.Serialize(payload));
+        return B64Url(body)+"."+B64Url(Hmac(body));
+    }
+    // requestState is attacker-controlled input: verify HMAC, tool binding, argument fingerprint, expiry and single use.
+    static bool ValidateState(string state,string tool,Dictionary<string,object> args,out string error)
+    {
+        error=null;int dot=state.LastIndexOf('.');if(dot<=0||dot==state.Length-1){error="Malformed requestState";return false;}
+        byte[] body,sig;try{body=FromB64Url(state.Substring(0,dot));sig=FromB64Url(state.Substring(dot+1));}catch(Exception){error="Malformed requestState encoding";return false;}
+        if(!Hmac(body).SequenceEqual(sig)){error="requestState failed integrity verification";return false;}
+        Dictionary<string,object> payload;try{payload=Json.Deserialize<Dictionary<string,object>>(Encoding.UTF8.GetString(body));}catch(Exception){error="Unreadable requestState payload";return false;}
+        if(S(payload,"t")!=tool){error="requestState was issued for a different tool";return false;}
+        if(S(payload,"f")!=Fingerprint(args)){error="Retried arguments differ from the confirmation request; reissue the call unchanged";return false;}
+        if(DateTime.UtcNow.Ticks>Convert.ToInt64(payload["e"])){error="Confirmation expired; reissue the call to request a new one";return false;}
+        string nonce=S(payload,"n");
+        if(UsedNonces.Count>1024)foreach(string used in UsedNonces.Keys.Take(UsedNonces.Count-512).ToArray()){byte removed;UsedNonces.TryRemove(used,out removed);}
+        if(!UsedNonces.TryAdd(nonce,0)){error="requestState was already consumed; reissue the call";return false;}
+        return true;
+    }
+    static string ConfirmSubject(string tool,Dictionary<string,object> args)
+    {
+        if(tool=="apply_patch"){string cwd=args.ContainsKey("cwd")?Convert.ToString(args["cwd"]):"";string patch=args.ContainsKey("patch")?Convert.ToString(args["patch"]):"";return "在 "+cwd+" 应用多文件补丁（"+patch.Split('\n').Length+" 行）";}
+        if(tool=="write_file"){object v;if(!args.TryGetValue("overwrite",out v)||v==null||!Convert.ToBoolean(v))return null;string path=args.ContainsKey("path")?Convert.ToString(args["path"]):"";try{if(!File.Exists(Full(path,true)))return null;}catch(Exception){return null;}return "覆盖写入已存在的文件 "+path;}
+        return null;
+    }
+    static object InputRequired(string tool,string subject,Dictionary<string,object> args)
+    {
+        var confirm=new Dictionary<string,object>{{"method","elicitation/create"},{"params",new{mode="form",message="确认执行 "+tool+"："+subject+"？该操作会修改本机文件。",requestedSchema=new{type="object",properties=new Dictionary<string,object>{{"confirm",new{type="string",@enum=new[]{"accept","decline"},description="Accept or decline this local file modification"}}},required=new[]{"confirm"},additionalProperties=false}}}};
+        return new{resultType="input_required",inputRequests=new Dictionary<string,object>{{"confirm",confirm}},requestState=MakeState(tool,args)};
+    }
+    // Returns null when the call may proceed; otherwise the result to reply with immediately.
+    static object ConfirmGate(string tool,Dictionary<string,object> call,Dictionary<string,object> args)
+    {
+        string subject=ConfirmSubject(tool,args);if(subject==null)return null;
+        object stateObj;if(!call.TryGetValue("requestState",out stateObj)||!(stateObj is string)||((string)stateObj).Length==0)return InputRequired(tool,subject,args);
+        string error;
+        if(!ValidateState((string)stateObj,tool,args,out error))return Result(new{error_code="CONFIRM_STATE_INVALID",message=error},true);
+        object responsesObj;var responses=call.TryGetValue("inputResponses",out responsesObj)&&responsesObj is Dictionary<string,object>?(Dictionary<string,object>)responsesObj:null;
+        object confirmObj;if(responses==null||!responses.TryGetValue("confirm",out confirmObj)||!(confirmObj is Dictionary<string,object>))return Result(new{error_code="CONFIRM_MISSING_RESPONSE",message="inputResponses.confirm (ElicitResult) is required to retry a confirmation"},true);
+        if(S((Dictionary<string,object>)confirmObj,"action")!="accept")return Result(new{error_code="CONFIRM_DECLINED",message="User declined the confirmation for "+tool+"; nothing was changed."},true);
+        return null;
+    }
+    static object Taskify(string tool,object answer)
+    {
+        if(tool!="exec_command")return null;
+        try{
+            var dict=Json.Deserialize<Dictionary<string,object>>(Json.Serialize(answer));
+            var sc=dict.ContainsKey("structuredContent")?dict["structuredContent"] as Dictionary<string,object>:null;
+            var res=sc!=null&&sc.ContainsKey("result")?sc["result"] as Dictionary<string,object>:null;
+            if(res==null||!res.ContainsKey("running")||!Convert.ToBoolean(res["running"])||!res.ContainsKey("session_id"))return null;
+            string sessionId=Convert.ToString(res["session_id"]);Command c;if(!Commands.TryGetValue(sessionId,out c))return null;
+            return new{resultType="task",taskId=sessionId,status="working",statusMessage="命令仍在运行："+c.Text,createdAt=c.Started.ToString("o"),lastUpdatedAt=DateTime.UtcNow.ToString("o"),ttlMs=3600000,pollIntervalMs=1000};
+        }catch(Exception){return null;}
+    }
+    static object TaskRpc(string method,Dictionary<string,object> p)
+    {
+        string taskId=S(p,"taskId");
+        if(method=="tasks/update")return new{};
+        Command c;if(!Commands.TryGetValue(taskId,out c))throw new ArgumentException("Unknown or expired taskId");
+        if(method=="tasks/cancel"){if(!c.Process.HasExited){c.CancelRequested=true;c.Stopped=true;c.Stop();}return new{};}
+        if(!c.Process.HasExited)return new{taskId=taskId,status="working",statusMessage="命令仍在运行 · "+Math.Round((DateTime.UtcNow-c.Started).TotalSeconds,0)+" 秒",createdAt=c.Started.ToString("o"),lastUpdatedAt=DateTime.UtcNow.ToString("o"),ttlMs=3600000,pollIntervalMs=1000};
+        if(c.CancelRequested)return new{taskId=taskId,status="cancelled",statusMessage="任务已按请求取消",createdAt=c.Started.ToString("o"),lastUpdatedAt=DateTime.UtcNow.ToString("o"),ttlMs=3600000};
+        int exitCode=0;try{exitCode=c.Process.ExitCode;}catch(Exception){}
+        DateTime finished;try{finished=c.Process.ExitTime.ToUniversalTime();}catch(Exception){finished=DateTime.UtcNow;}
+        return new{taskId=taskId,status="completed",statusMessage="命令已结束 · exit_code="+exitCode,createdAt=c.Started.ToString("o"),lastUpdatedAt=(finished>c.Started?finished:DateTime.UtcNow).ToString("o"),ttlMs=3600000,result=Result(Snapshot(taskId,0,false,false))};
+    }
+    static void Modern(object id,string method,Dictionary<string,object> p,Dictionary<string,object> meta,string trace,StreamWriter output)
+    {
+        string pv=S(meta,PvKey);
+        if(pv!=ModernVersion){Reply(output,new{jsonrpc="2.0",id=id,error=new{code=-32022,message="Unsupported protocol version '"+pv+"'; supported: "+ModernVersion,data=new{supportedVersions=new[]{ModernVersion}}}});return;}
+        object capsObj;if(!meta.TryGetValue(CapsKey,out capsObj)||!(capsObj is Dictionary<string,object>)){Reply(output,new{jsonrpc="2.0",id=id,error=new{code=-32021,message="Missing required client capabilities declaration: "+CapsKey}});return;}
+        var caps=(Dictionary<string,object>)capsObj;
+        bool elicitation=caps.ContainsKey("elicitation");
+        object extObj;bool tasks=caps.TryGetValue("extensions",out extObj)&&extObj is Dictionary<string,object>&&((Dictionary<string,object>)extObj).ContainsKey(TasksExt);
+        if(method=="server/discover"){Console.Error.WriteLine("[Workspace] server/discover (modern) | "+Version+" | instance="+InstanceId);Reply(output,new{jsonrpc="2.0",id=id,result=Discover()});return;}
+        if(method=="tools/list"){Console.Error.WriteLine("[Workspace] tools/list (modern) | "+Tools().Length+" tools | "+Version);Reply(output,new{jsonrpc="2.0",id=id,result=ModernWrap(new{tools=Tools(),ttlMs=300000,cacheScope="private"})});return;}
+        if(method=="tools/call"){
+            string tool=S(p,"name");CurrentTool=tool;
+            var args=p.ContainsKey("arguments")&&p["arguments"] is Dictionary<string,object>?(Dictionary<string,object>)p["arguments"]:new Dictionary<string,object>();
+            if(elicitation){object gate;try{gate=ConfirmGate(tool,p,args);}catch(Exception ex){gate=Result(new{error_code="CONFIRM_ERROR",message=ex.Message},true);}if(gate!=null){Reply(output,new{jsonrpc="2.0",id=id,result=ModernWrap(gate)});return;}}
+            if(tool=="read_workspace_activity"){try{Reply(output,new{jsonrpc="2.0",id=id,result=ModernWrap(Call(tool,args))});}catch(Exception ex){CurrentTool=tool;Reply(output,new{jsonrpc="2.0",id=id,result=ModernWrap(Result(new{error_code="TOOL_ERROR",message=ex.Message},true))});}return;}
+            object responseId=id;bool taskCapable=tasks;
+            if(!Work.TryAdd(()=>{try{object answer=RunCall(p,output,trace);if(taskCapable){object task=Taskify(tool,answer);if(task!=null){Reply(output,new{jsonrpc="2.0",id=responseId,result=ModernWrap(task)});return;}}Reply(output,new{jsonrpc="2.0",id=responseId,result=ModernWrap(answer)});}catch(Exception ex){Reply(output,new{jsonrpc="2.0",id=responseId,error=new{code=-32603,message=ex.Message}});}}))Reply(output,new{jsonrpc="2.0",id=id,error=new{code=-32000,message="Tool queue is full; wait for existing calls."}});
+            return;
+        }
+        if(method=="tasks/get"||method=="tasks/update"||method=="tasks/cancel"){object answer;try{answer=TaskRpc(method,p);}catch(Exception ex){Reply(output,new{jsonrpc="2.0",id=id,error=new{code=-32602,message=ex.Message}});return;}Reply(output,new{jsonrpc="2.0",id=id,result=ModernWrap(answer)});return;}
+        Reply(output,new{jsonrpc="2.0",id=id,error=new{code=-32601,message="Method not found"}});
+    }
     public static void Run()
     {
         using(var dashboard=new LocalDashboard(thread=>LiveSnapshot(new Dictionary<string,object>{{"thread_id",thread}},true)))
@@ -241,13 +374,17 @@ static class WorkspaceServer
             var worker=System.Threading.Tasks.Task.Run(()=>{foreach(var action in Work.GetConsumingEnumerable())action();});
             string line;try{while((line=input.ReadLine())!=null){object id=null;try{
                 var req=Json.Deserialize<Dictionary<string,object>>(line);if(!req.TryGetValue("id",out id))continue;string method=S(req,"method");object result;
-                if(method=="initialize"){Console.Error.WriteLine("[Workspace] initialize | "+Version+" | instance="+InstanceId);result=new{protocolVersion="2025-06-18",capabilities=new{tools=new{listChanged=false}},serverInfo=new{name="local-workspace",version=Version},instructions="FIRST call register_conversation with the workspace path; the title is optional and auto-derived from the directory name if omitted. Include actual chat_id only if known. Tell the user the title and returned dashboard_url before work; the local desktop app embeds that dashboard and observes every tool, plan and command automatically, so never try to render a visual panel inside ChatGPT. Pass returned thread_id on every tool call. Never attach another chat to a remembered global thread. Omitted calls appear as unassigned. Windows local workspace with read, write, edit, search, native image reading, Git inspection and hidden Git Bash execution by default; explicitly select shell=powershell or shell=pwsh for PowerShell syntax. Begin with open_workspace to read scoped project guidance, discover shells and inspect the current plan. Use update_plan for multi-step work and apply_patch for reviewed multi-file changes. get_workspace_status verifies the actual server and available tools. Commands accept cmd/cwd/yield_time_ms; write_stdin continues sessions or sends input, and never re-runs the command. This is a local execution harness, not a model runtime or PTY. All local drives are available subject to OS permissions. Discover roots using list_directory with an empty path. Prefer returned forward-slash absolute paths; never insert Markdown escape backslashes before underscores. Inspect isError, exit_code and timed_out: an error is not success, a running session is not completion. Poll command sessions instead of re-running commands. read_command provides a non-consuming output snapshot; poll_command consumes only incremental output. Read AGENTS.md before changing a project. show_changes excludes shell/external changes; use git_status and git_diff for Git changes. Search partial/skip flags must not be interpreted as exhaustive results. Some hosts may filter tool discovery. Text results remain authoritative. Never claim the server is read-only merely because a host omits tools; report the visible tool names and try get_workspace_status when available. Report actual work progress and concrete failures to the user; do not claim changes without tool receipts."};}
+                var rpcParams=req.ContainsKey("params")&&req["params"] is Dictionary<string,object>?(Dictionary<string,object>)req["params"]:null;
+                var meta=rpcParams!=null&&rpcParams.ContainsKey("_meta")&&rpcParams["_meta"] is Dictionary<string,object>?(Dictionary<string,object>)rpcParams["_meta"]:null;
+                string trace="";if(meta!=null){object tv;if(meta.TryGetValue("traceparent",out tv)&&tv is string)trace=(string)tv;}
+                if(meta!=null&&(meta.ContainsKey(PvKey)||meta.ContainsKey(CapsKey))){Modern(id,method,rpcParams,meta,trace,output);continue;}
+                if(method=="initialize"){Console.Error.WriteLine("[Workspace] initialize | "+Version+" | instance="+InstanceId);result=new{protocolVersion="2025-06-18",capabilities=LegacyCapabilities,serverInfo=ServerInfo,instructions=Instructions};}
                 else if(method=="ping")result=new{};
                 else if(method=="tools/list"){Console.Error.WriteLine("[Workspace] tools/list | "+Tools().Length+" tools | "+Version);result=new{tools=Tools()};}
                 else if(method=="tools/call"){
                     var call=(Dictionary<string,object>)req["params"];string tool=S(call,"name");
                     if(tool=="read_workspace_activity"){try{result=Call(tool,call.ContainsKey("arguments")?(Dictionary<string,object>)call["arguments"]:new Dictionary<string,object>());}catch(Exception ex){CurrentTool=tool;result=Result(new{error_code="TOOL_ERROR",message=ex.Message},true);}}
-                    else {object responseId=id;if(!Work.TryAdd(()=>{try{object answer=RunCall(call,output);Reply(output,new{jsonrpc="2.0",id=responseId,result=answer});}catch(Exception ex){Reply(output,new{jsonrpc="2.0",id=responseId,error=new{code=-32603,message=ex.Message}});}}))Reply(output,new{jsonrpc="2.0",id=id,error=new{code=-32000,message="Tool queue is full; wait for existing calls."}});continue;}
+                    else {object responseId=id;if(!Work.TryAdd(()=>{try{object answer=RunCall(call,output,trace);Reply(output,new{jsonrpc="2.0",id=responseId,result=answer});}catch(Exception ex){Reply(output,new{jsonrpc="2.0",id=responseId,error=new{code=-32603,message=ex.Message}});}}))Reply(output,new{jsonrpc="2.0",id=id,error=new{code=-32000,message="Tool queue is full; wait for existing calls."}});continue;}
                 }
                 else {Reply(output,new{jsonrpc="2.0",id=id,error=new{code=-32601,message="Method not found"}});continue;}
                 Reply(output,new{jsonrpc="2.0",id=id,result=result});

@@ -4,7 +4,7 @@
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-green" alt="MIT License"></a>
   <img src="https://img.shields.io/badge/platform-Windows%2010%2F11%20x64-blue" alt="Windows 10/11 x64">
   <img src="https://img.shields.io/badge/.NET%20Framework-4.8-orange" alt=".NET Framework 4.8">
-  <img src="https://img.shields.io/badge/version-1.7.0-brightgreen" alt="v1.7.0">
+  <img src="https://img.shields.io/badge/version-2.0.0-brightgreen" alt="v2.0.0">
 </p>
 
 <p align="center">
@@ -26,6 +26,7 @@
 ## 特性一览
 
 - **24 个本地工具**：文件读写、精确编辑、多文件补丁、搜索、命令执行与增量输出、Git 审阅、执行计划。
+- **双时代 MCP 协议（v2.0）**：同一个 EXE 同时服务 2025-06-18 legacy 客户端（`initialize` 握手，ChatGPT Tunnel 现行方式，行为零变化）与 [2026-07-28](https://modelcontextprotocol.io/specification/2026-07-28) modern 无状态客户端：`server/discover` 能力发现、每请求 `_meta` 版本协商、`resultType`、可缓存 `tools/list`（`ttlMs`/`cacheScope`）、MRTR 危险操作确认、官方 Tasks 扩展长任务句柄、OpenTelemetry trace 关联与工具图标。
 - **内嵌实时工作台**：桌面程序首个页签直接嵌入工作台页面（WebView2，随系统 Edge 附带；缺运行时自动回退浏览器），每秒同步，按对话隔离时间线，检查器按调用类型渲染（diff、命令输出、读取正文、搜索命中）。
 - **一体化桌面外壳**：单行工具栏（启动/停止合一、在浏览器打开、更多菜单）+ 四个页签（实时工作台 / 操作记录 / 原始日志 / 连接配置）；操作记录与原始日志为自绘视图，按级别着色、等宽排版、尾随跟随。
 - **Codex 风格工作流**：`open_workspace` 读取 AGENTS.md 约定 → `update_plan` 展示计划 → `apply_patch` 预验证后提交多文件补丁。
@@ -78,7 +79,7 @@
 
 > 调用 get_workspace_status 确认连接
 
-应返回 `version: 1.7.0`、`tool_count: 24`、实际程序路径和进程实例 ID。**原始日志**页签会依次出现 `initialize`、`tools/list` 与工具回执——仅"已连接"不能证明 ChatGPT 已刷新工具。
+应返回 `version: 2.0.0`、`tool_count: 24`、`protocol_versions`、实际程序路径和进程实例 ID。**原始日志**页签会依次出现 `initialize`、`tools/list` 与工具回执——仅"已连接"不能证明 ChatGPT 已刷新工具。
 
 ## 怎么用（调用方式）
 
@@ -207,12 +208,30 @@ node --test tests/dashboard-ui.test.cjs      # 真实浏览器 UI 回归
 - `settings.json` 含 API Key，不要提交、截图或公开。
 - 服务与活动记录属于当前进程，重启后需重新连接与登记；桌面日志仅保存在当前窗口，退出即清空。
 
+## 协议兼容性
+
+本服务器是 **dual-era**（双时代）实现，按客户端打开方式自动选择行为，两条路径互不干扰：
+
+| 时代 | 触发方式 | 提供的能力 |
+| --- | --- | --- |
+| legacy（2025-06-18） | `initialize` 握手（ChatGPT Tunnel 现行方式） | 与 1.7.0 完全一致：24 个工具、进度通知、结构化输出 |
+| modern（[2026-07-28](https://modelcontextprotocol.io/specification/2026-07-28)） | 请求 `_meta` 携带 `io.modelcontextprotocol/protocolVersion` | 无状态每请求协商、`server/discover`、`resultType`、`tools/list` 缓存字段（`ttlMs`/`cacheScope: private`）、`serverInfo` 回执标识 |
+
+modern 时代按客户端声明的能力渐进启用：
+
+- **MRTR 危险操作确认**：客户端声明 `elicitation` 能力时，`apply_patch` 与覆盖已有文件的 `write_file` 会先返回 `resultType: "input_required"` 与 `elicitation/create` 请求；客户端带 `inputResponses` + `requestState` 重试后才真正执行。`requestState` 经 HMAC-SHA256 完整性保护，绑定工具名与参数指纹、10 分钟过期且一次性消费（防篡改、防重放）。未声明该能力的客户端行为不变。
+- **Tasks 扩展（`io.modelcontextprotocol/tasks`）**：客户端声明该扩展时，仍在运行的 `exec_command` 返回标准任务句柄（`resultType: "task"`），可用 `tasks/get` 轮询、`tasks/cancel` 取消；未声明的客户端继续拿经典 `session_id` 会话结果。
+- **OpenTelemetry**：请求 `_meta` 中的 `traceparent` 会记入操作日志，实时工作台检查器显示 trace 短 ID，便于与宿主侧链路关联。
+- 版本不匹配返回 `UnsupportedProtocolVersionError`（-32022）；modern 时代按规范不再响应 `ping`。
+
 ## 官方依据
 
 - [OpenAI Apps SDK Quickstart（Developer Mode 与连接器创建）](https://developers.openai.com/apps-sdk/quickstart/)
 - [OpenAI MCP Apps UI 与桥接](https://developers.openai.com/plugins/build/chatgpt-ui)
 - [工具元数据、输出结构与注解](https://developers.openai.com/plugins/reference#tool-descriptor-parameters)
 - [MCP 进度通知](https://modelcontextprotocol.io/specification/2025-06-18/basic/utilities/progress)
+- [MCP 2026-07-28 规范（modern 时代依据）](https://modelcontextprotocol.io/specification/2026-07-28)
+- [MCP Tasks 扩展](https://modelcontextprotocol.io/extensions/tasks)
 - [DevSpace 官方源码](https://github.com/Waishnav/devspace)
 
 ## 许可与致谢

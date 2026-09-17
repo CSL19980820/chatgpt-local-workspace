@@ -5,15 +5,15 @@ using System.Collections.Generic;
 // This bounded, process-local journal is independent of the ordered tool worker.
 static class WorkspaceActivity
 {
-    sealed class Entry { public string Id,Tool,Target,Status,Error,Preview,ThreadId; public DateTime Started; public long Elapsed; public Dictionary<string,object> Detail; }
+    sealed class Entry { public string Id,Tool,Target,Status,Error,Preview,ThreadId,Trace; public DateTime Started; public long Elapsed; public Dictionary<string,object> Detail; }
     sealed class Viewer { public string Id,Path,Bridge,Mode; public DateTime Seen; public int Reads; }
     static readonly object Gate=new object();
     static readonly List<Entry> Entries=new List<Entry>();
     static readonly List<Viewer> Viewers=new List<Viewer>();
     public static bool Within(string target,string root) { return string.IsNullOrEmpty(root)||target.Equals(root,StringComparison.OrdinalIgnoreCase)||target.StartsWith(root.TrimEnd('/')+"/",StringComparison.OrdinalIgnoreCase); }
-    public static string Begin(string tool,string target,string thread="unassigned")
+    public static string Begin(string tool,string target,string thread="unassigned",string trace="")
     {
-        lock(Gate){var e=new Entry{Id=Guid.NewGuid().ToString("N"),Tool=tool,ThreadId=thread,Target=target,Status="running",Started=DateTime.UtcNow};Entries.Add(e);if(Entries.Count>100)Entries.RemoveAt(0);return e.Id;}
+        lock(Gate){var e=new Entry{Id=Guid.NewGuid().ToString("N"),Tool=tool,ThreadId=thread,Trace=trace!=null&&trace.Length>200?trace.Substring(0,200):trace,Target=target,Status="running",Started=DateTime.UtcNow};Entries.Add(e);if(Entries.Count>100)Entries.RemoveAt(0);return e.Id;}
     }
     public static void Finish(string id,bool failed,long elapsed,string error,string preview,Dictionary<string,object> detail=null)
     {
@@ -22,7 +22,7 @@ static class WorkspaceActivity
     // The local dashboard reads Detail and skips the larger raw receipt it never renders.
     public static object[] Read(string path,string thread="",bool receipts=true)
     {
-        lock(Gate)return Entries.Where(x=>Within(x.Target,path)&&(thread.Length==0||x.ThreadId==thread)).Select(x=>new{thread_id=x.ThreadId,id=x.Id,tool=x.Tool,target=x.Target,status=x.Status,started_at=x.Started.ToString("o"),elapsed_ms=x.Status=="running"?(long)(DateTime.UtcNow-x.Started).TotalMilliseconds:x.Elapsed,error_code=x.Error,preview=receipts?x.Preview:null,detail=x.Detail,session_id=Session(x.Detail)}).ToArray();
+        lock(Gate)return Entries.Where(x=>Within(x.Target,path)&&(thread.Length==0||x.ThreadId==thread)).Select(x=>new{thread_id=x.ThreadId,id=x.Id,tool=x.Tool,target=x.Target,status=x.Status,started_at=x.Started.ToString("o"),elapsed_ms=x.Status=="running"?(long)(DateTime.UtcNow-x.Started).TotalMilliseconds:x.Elapsed,error_code=x.Error,trace=x.Trace,preview=receipts?x.Preview:null,detail=x.Detail,session_id=Session(x.Detail)}).ToArray();
     }
     static string Session(Dictionary<string,object> detail){object value;if(detail!=null&&detail.TryGetValue("session_id",out value))return value as string;return null;}
     public static void Seen(string id,string path,string bridge,string mode)

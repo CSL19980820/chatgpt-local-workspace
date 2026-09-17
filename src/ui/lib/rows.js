@@ -34,6 +34,7 @@ export function buildRows(snapshot, now = Date.now()) {
       id: call.id, tool: call.tool, thread_id: call.thread_id, target: call.target,
       status: failed ? 'failed' : call.status, live, sessionId: sessionId, session,
       started_at: call.started_at, start, elapsed_ms: elapsed, detail,
+      trace: call.trace || null,
       synthetic: false,
     });
   }

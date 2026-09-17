@@ -7,6 +7,12 @@ import { duration, stamp } from '@/lib/format.js';
 import { KIND_ICON, titleOf } from '@/lib/labels.js';
 import { isRunning, liveElapsed, staleServer, stateText } from '@/lib/rows.js';
 
+// W3C traceparent is "version-traceid-spanid-flags"; show just enough of the trace id to correlate.
+const traceShort = value => {
+  const parts = String(value).split('-');
+  return (parts.length >= 2 ? parts[1] : parts[0]).slice(0, 8);
+};
+
 const Empty = ({ title, hint }) => (
   <div className="empty">
     <Icon name="info" />
@@ -22,7 +28,7 @@ export function DetailPane({ row, now, snapshot, onCopy, copied }) {
   const running = row ? isRunning(row) : false;
   const elapsed = row ? liveElapsed(row, now) : 0;
   const meta = row
-    ? [stateText(row), '开始 ' + stamp(row.started_at), '耗时 ' + duration(elapsed), running ? '仍在运行' : ''].filter(Boolean).join(' · ')
+    ? [stateText(row), '开始 ' + stamp(row.started_at), '耗时 ' + duration(elapsed), running ? '仍在运行' : '', row.trace ? 'trace ' + traceShort(row.trace) : ''].filter(Boolean).join(' · ')
     : '';
   return (
     <section className="detail-column" aria-label="调用详情">
