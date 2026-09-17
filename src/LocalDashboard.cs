@@ -12,6 +12,9 @@ using System.Web.Script.Serialization;
 sealed class LocalDashboard : IDisposable
 {
     readonly TcpListener listener; readonly Func<string,object> snapshot; readonly SemaphoreSlim slots=new SemaphoreSlim(8); bool stopped;
+    [ThreadStatic] static JavaScriptSerializer jsonInstance;
+    // Reused per pool thread; the snapshot endpoint is polled ~1/sec per open dashboard.
+    static JavaScriptSerializer Json { get { var j=jsonInstance; if(j==null){ j=new JavaScriptSerializer{MaxJsonLength=8*1024*1024}; jsonInstance=j; } return j; } }
     public static string Url="";
     public LocalDashboard(Func<string,object> getSnapshot)
     {
@@ -37,7 +40,7 @@ sealed class LocalDashboard : IDisposable
             }
             else if(uri.AbsolutePath=="/api/snapshot"){
                 string thread="";foreach(string pair in uri.Query.TrimStart('?').Split('&')){var parts=pair.Split(new[]{'='},2);if(parts[0]=="thread")thread=Uri.UnescapeDataString(parts.Length>1?parts[1]:"");}
-                try{Send(stream,200,"application/json",new JavaScriptSerializer{MaxJsonLength=8*1024*1024}.Serialize(snapshot(thread)));}catch(ArgumentException ex){Send(stream,400,"application/json",new JavaScriptSerializer().Serialize(new{error=ex.Message}));}
+                try{Send(stream,200,"application/json",Json.Serialize(snapshot(thread)));}catch(ArgumentException ex){Send(stream,400,"application/json",Json.Serialize(new{error=ex.Message}));}
             }else Send(stream,404,"text/plain","Not found");
         }}catch(IOException){}catch(SocketException){}catch(ObjectDisposedException){}
     }

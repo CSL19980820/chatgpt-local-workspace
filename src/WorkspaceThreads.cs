@@ -15,7 +15,9 @@ static class WorkspaceThreads
     }
     public static object Register(string title,string path,string chatId,string existing)
     {
-        if(string.IsNullOrWhiteSpace(title)||title.Length>120)throw new ArgumentException("title must contain 1..120 characters");
+        title=(title??"").Trim();
+        if(title.Length==0)title=DeriveTitle(path);
+        if(title.Length>120)throw new ArgumentException("title must contain 1..120 characters");
         Guid parsed;if(chatId.Length>0&&!Guid.TryParseExact(chatId,"D",out parsed))throw new ArgumentException("chat_id must be the actual UUID from a known ChatGPT /c/ URL; omit it if unknown");
         lock(Gate){
             Conversation c=null;
@@ -25,6 +27,16 @@ static class WorkspaceThreads
             c.Title=title;c.Path=path;if(chatId.Length>0)c.ChatId=chatId;
             return new{thread_id=c.Id,title=c.Title,path=c.Path,chat_id=c.ChatId,chat_url=c.ChatId.Length==0?null:"https://chatgpt.com/c/"+c.ChatId,dashboard_url=LocalDashboard.Url+"#thread="+c.Id,instruction="Tell the user this conversation title and dashboard URL BEFORE starting work. Pass thread_id on EVERY subsequent tool call. This is a local grouping ID, not an automatically discovered ChatGPT chat ID."};
         }
+    }
+    // Title is optional; derive a readable default from the workspace directory so registration only needs a path.
+    static string DeriveTitle(string path)
+    {
+        string trimmed=(path??"").Trim().TrimEnd('/');
+        int slash=trimmed.LastIndexOf('/');
+        string name=slash>=0?trimmed.Substring(slash+1):trimmed;
+        if(name.Length==0||name.EndsWith(":"))name=trimmed;
+        if(name.Length==0)name="工作区 "+DateTime.UtcNow.ToString("HH:mm");
+        return name.Length>120?name.Substring(0,120):name;
     }
     public static object[] List(){lock(Gate)return Items.Select(c=>new{thread_id=c.Id,title=c.Title,path=c.Path,chat_id=c.ChatId,chat_url=c.ChatId.Length==0?null:"https://chatgpt.com/c/"+c.ChatId,created_at=c.Created.ToString("o")}).ToArray();}
 }

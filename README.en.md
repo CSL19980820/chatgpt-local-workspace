@@ -15,6 +15,8 @@ Let ChatGPT work directly on your machine through the **official OpenAI tunnel**
 
 > Unofficial community project. Not affiliated with OpenAI.
 
+**What it's for**: drive your machine's files, commands and Git straight from a **ChatGPT web conversation**, with a **standalone live dashboard** that replays every tool call. Unlike the `codex` CLI or `@modelcontextprotocol/server-filesystem`, which live in a terminal / TUI, this runs **inside ChatGPT web** and ships a visual timeline, diffs and command output — no separate terminal, no always-on Node service at runtime. If you want to edit local code from a ChatGPT chat and watch each step, this is it; if you already live in the Codex CLI terminal, you don't need to switch.
+
 | Desktop app: connection & operation log | Live dashboard: call timeline |
 | --- | --- |
 | ![Desktop app](docs/images/desktop-app.png) | ![Dashboard](docs/images/dashboard-timeline.png) |
@@ -35,9 +37,11 @@ Let ChatGPT work directly on your machine through the **official OpenAI tunnel**
 | --- | --- |
 | OS | Windows 10 / 11 x64 |
 | Runtime | .NET Framework 4.8 (built into Win10 1903+) |
-| ChatGPT plan | Supports creating custom connectors / tunnels |
+| ChatGPT plan | A paid plan that supports **Developer Mode** (Plus / Pro / Team / Enterprise, etc.; check current eligibility), used to create the connector and tunnel |
 | Command execution | Git for Windows by default (hidden Git Bash); system PowerShell also selectable explicitly |
 | Node.js | Only for building the UI and running tests — not needed at runtime |
+
+> **On platform scope**: Windows-only is a deliberate tradeoff, not an unfinished gap — the goal is a single install-free native EXE that listens on loopback with zero Node/Python runtime dependencies. .NET Framework 4.8 ships with Win10 1903+, so the release needs no runtime install. There is no macOS / Linux build yet.
 
 ## Quick start
 
@@ -45,9 +49,15 @@ Let ChatGPT work directly on your machine through the **official OpenAI tunnel**
 
 Grab the release archive from [Releases](../../releases) and extract it anywhere. Keep `LocalWorkspace.exe` and the official `tunnel-client.exe` side by side.
 
-### 2. Create a tunnel
+### 2. Enable Developer Mode and create a connector (the critical step)
 
-In ChatGPT's developer settings, create a connector / plugin to obtain a **Tunnel ID** and **API Key** (see [OpenAI docs](https://platform.openai.com/docs/)).
+This happens in **ChatGPT web**, not in this plugin:
+
+1. **Enable Developer Mode**: sign in to ChatGPT web → Settings → find **Developer Mode** and turn it on. If you don't see the toggle, your plan most likely doesn't include Developer Mode (a paid plan is required) — this is the most common blocker.
+2. **Create a connector**: go to ChatGPT's plugins / connectors page (`chatgpt.com/plugins`), click create (+), and add a connector pointing at your local MCP server.
+3. **Get the Tunnel ID and API Key**: the official `tunnel-client.exe` bundled in the release bridges your local server to ChatGPT; the connector flow yields the **Tunnel ID** and **API Key** you paste into the desktop app in the next step.
+
+> For the authoritative steps and current UI labels, follow the [OpenAI Apps SDK Quickstart](https://developers.openai.com/apps-sdk/quickstart/) (ChatGPT setting names change between versions). Note: `platform.openai.com/docs` is the **API reference**, not this connector / Developer Mode flow.
 
 ### 3. Connect
 
@@ -89,11 +99,13 @@ All tools are invoked automatically by the model — you just describe the task.
 
 ### Open the live dashboard
 
-After connecting, click **Open live dashboard** in the desktop app — a browser page synced from your machine every second, independent of ChatGPT cards. For each new conversation, start with:
+After connecting, click **Open live dashboard** in the desktop app — a browser page synced from your machine every second, independent of ChatGPT cards. You usually **don't have to ask the model to register**: it is instructed at `initialize` to call `register_conversation` first, and the title is optional (auto-derived from the directory name), so at most you just state the directory:
 
-> Call register_conversation for this chat, title "Refactor payment module", path E:/work/pay
+> This chat is refactoring the payment module under E:/work/pay
 
-The tool returns a local thread ID and a direct dashboard link; subsequent calls are grouped per conversation in the timeline.
+The tool returns a local thread ID and a direct dashboard link; subsequent calls are grouped per conversation in the timeline. Add a title to customize the name, or have the model pass a known `chat_id` to bind the real ChatGPT conversation (the same `chat_id` reuses one thread).
+
+> **Why assignment can't be fully automatic**: one tunnel/process can serve several ChatGPT conversations at once, and the host passes no signal that distinguishes them. So calls without a `thread_id` land in "Unassigned" and are never guessed into a thread by directory or time — a deliberate isolation tradeoff, not a gap. For precise isolation, register each conversation and pass its own `thread_id`.
 
 ### Embedded ChatGPT panel
 
@@ -102,6 +114,8 @@ The tool returns a local thread ID and a direct dashboard link; subsequent calls
 The panel refreshes current operations, plans and command output read-only every 2 seconds. "Watching" means no tool is running right now — it does not mean the task is finished.
 
 ## The 25 tools
+
+> Full input parameters, types and return fields are in [docs/TOOLS.md](docs/TOOLS.md). The table below only groups them by purpose.
 
 | Purpose | Tools |
 | --- | --- |
@@ -185,11 +199,13 @@ Verification records: [VERIFICATION.md](VERIFICATION.md). Upgrade notes: [UPGRAD
 
 - The dashboard listens only on a dynamic `127.0.0.1` port; no remote access or execution endpoints are exposed.
 - Local disks are accessed with the current Windows user's privileges; the workspace is **not** an OS sandbox — run under a trusted account.
+- **There is currently no command-level or path-level guardrail**: `exec_command` runs whatever the model issues with the current user's privileges — no allowlist, and no confirmation prompt even for destructive commands (e.g. `rm -rf`). The file tools refuse path escapes and the tools never auto-`commit`/`push`, but the **shell is unrestricted**. Scope which directories you point the model at and review every step in the live dashboard timeline.
 - `settings.json` contains your API key — never commit, screenshot or share it.
 - Service and activity records live in the current process; reconnect and re-register after restarts.
 
 ## Official references
 
+- [OpenAI Apps SDK Quickstart (Developer Mode & connector creation)](https://developers.openai.com/apps-sdk/quickstart/)
 - [OpenAI MCP Apps UI & bridging](https://developers.openai.com/plugins/build/chatgpt-ui)
 - [Tool metadata, output structure & annotations](https://developers.openai.com/plugins/reference#tool-descriptor-parameters)
 - [MCP progress notifications](https://modelcontextprotocol.io/specification/2025-06-18/basic/utilities/progress)
@@ -200,7 +216,7 @@ Verification records: [VERIFICATION.md](VERIFICATION.md). Upgrade notes: [UPGRAD
 This is an unofficial open-source project, not affiliated with OpenAI. Released under the MIT license (see [LICENSE](LICENSE)).
 
 - Architecture and tool design reference and partially derive from [Waishnav/devspace](https://github.com/Waishnav/devspace) (MIT); its sources are vendored under `vendor/devspace/` with the original license file.
-- `tunnel-client.exe` in release archives is the official OpenAI component (Apache-2.0), distributed via GitHub Releases and not versioned in this repository.
+- `tunnel-client.exe` in release archives is the official OpenAI component (Apache-2.0), distributed via GitHub Releases and not versioned in this repository. Each release pins a specific tunnel-client version — use the one matching that release's notes and don't mix versions across releases.
 
 ## Star History
 
