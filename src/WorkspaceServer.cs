@@ -18,7 +18,7 @@ static class WorkspaceServer
     [ThreadStatic] internal static string CurrentThread;
     static readonly object CommandsGate=new object();
     static readonly System.Collections.Concurrent.BlockingCollection<Action> Work=new System.Collections.Concurrent.BlockingCollection<Action>(128);
-    public const string Version="2.0.0";
+    public const string Version="2.0.1";
     // 2026-07-28 modern era: stateless per-request negotiation; the legacy initialize handshake keeps serving 2025-06-18 clients.
     public const string ModernVersion="2026-07-28";
     const string PvKey="io.modelcontextprotocol/protocolVersion",CapsKey="io.modelcontextprotocol/clientCapabilities",ServerInfoKey="io.modelcontextprotocol/serverInfo",TasksExt="io.modelcontextprotocol/tasks";
@@ -45,7 +45,13 @@ static class WorkspaceServer
     static object Tool(string name, string description, bool read, Dictionary<string, object> properties, params string[] required)
     {
         properties["thread_id"]=Schema("string","Local conversation ID returned by register_conversation. Include on every call; omitted calls are explicitly unassigned, never attached to another conversation.");
-        return new { name = name, title=Title(name), icons=new[]{new{src=IconFor(name),mimeType="image/svg+xml",sizes=new[]{"16x16"}}}, description = description+" Use absolute Windows workspace paths with forward slashes; patch file paths are relative to cwd.", inputSchema = new { type = "object", properties = properties, required = required, additionalProperties = false }, outputSchema=new{type="object",properties=new{tool=new{type="string"},result=new{type="object"},isError=new{type="boolean"}},required=new[]{"tool","result","isError"},additionalProperties=false}, annotations = new { readOnlyHint = read, destructiveHint = !read&&name!="register_conversation"&&name!="create_directory"&&name!="update_plan", idempotentHint = read||name=="create_directory"||name=="stop_command"||name=="update_plan", openWorldHint = name=="exec_command"||name=="write_stdin" }, _meta=ToolMeta(name) };
+        string desc=description+" Use absolute Windows workspace paths with forward slashes; patch file paths are relative to cwd.";
+        var inputSchema=new { type = "object", properties = properties, required = required, additionalProperties = false };
+        var outputSchema=new{type="object",properties=new{tool=new{type="string"},result=new{type="object"},isError=new{type="boolean"}},required=new[]{"tool","result","isError"},additionalProperties=false};
+        var annotations = new { readOnlyHint = read, destructiveHint = !read&&name!="register_conversation"&&name!="create_directory"&&name!="update_plan", idempotentHint = read||name=="create_directory"||name=="stop_command"||name=="update_plan", openWorldHint = name=="exec_command"||name=="write_stdin" };
+        // ChatGPT's connector security validation rejects data-URI icons, so legacy discovery stays byte-identical to 1.7.0.
+        if (EmitIcons) return new { name = name, title=Title(name), icons=new[]{new{src=IconFor(name),mimeType="image/svg+xml",sizes=new[]{"16x16"}}}, description = desc, inputSchema = inputSchema, outputSchema = outputSchema, annotations = annotations, _meta=ToolMeta(name) };
+        return new { name = name, title=Title(name), description = desc, inputSchema = inputSchema, outputSchema = outputSchema, annotations = annotations, _meta=ToolMeta(name) };
     }
     static object ToolMeta(string name)
     {
@@ -71,14 +77,23 @@ static class WorkspaceServer
         return "data:image/svg+xml;base64,"+Convert.ToBase64String(Encoding.UTF8.GetBytes(svg));
     }
     static object[] toolsCache;
+    static object[] toolsModernCache;
     static string[] toolNamesCache;
     static readonly object toolsGate = new object();
+    static bool EmitIcons;
     // Tool descriptors are fully static; build once and reuse instead of reconstructing 25 nested objects on every tools/list and get_workspace_status.
+    // Two variants: legacy hosts (ChatGPT) get 1.7.0-identical descriptors; modern hosts additionally get icons.
     static object[] Tools()
     {
         var cached = toolsCache;
         if (cached != null) return cached;
-        lock (toolsGate) { if (toolsCache == null) toolsCache = BuildTools(); return toolsCache; }
+        lock (toolsGate) { if (toolsCache == null) toolsCache = BuildTools(false); return toolsCache; }
+    }
+    static object[] ToolsModern()
+    {
+        var cached = toolsModernCache;
+        if (cached != null) return cached;
+        lock (toolsGate) { if (toolsModernCache == null) toolsModernCache = BuildTools(true); return toolsModernCache; }
     }
     static string[] ToolNames()
     {
@@ -86,7 +101,13 @@ static class WorkspaceServer
         if (cached != null) return cached;
         lock (toolsGate) { if (toolNamesCache == null) toolNamesCache = Tools().Select(t => (string)t.GetType().GetProperty("name").GetValue(t, null)).ToArray(); return toolNamesCache; }
     }
-    static object[] BuildTools()
+    static object[] BuildTools(bool withIcons)
+    {
+        lock (toolsGate) { EmitIcons = withIcons; }
+        try { return BuildToolsInner(); }
+        finally { lock (toolsGate) { EmitIcons = false; } }
+    }
+    static object[] BuildToolsInner()
     {
         return new[] {
             Tool("register_conversation","FIRST register this conversation before workspace work. Provide the workspace path; a title is optional and auto-derived from the directory name when omitted. Omit chat_id unless the actual ChatGPT /c/ UUID is known (never fabricate). Announce the returned title and local dashboard URL before proceeding. Include returned thread_id on EVERY tool call. Reuse the ID in this conversation; other chats must register separately. The independent local dashboard does not depend on ChatGPT cards.",false,new Dictionary<string,object>{{"title",Schema("string","Optional human-readable conversation/task title, 1..120 characters; omit to auto-derive from the workspace directory name")},{"path",Schema("string","Absolute workspace directory")},{"chat_id",Schema("string","Actual known ChatGPT chat UUID, optional; never guess")}},"path"),
@@ -354,7 +375,7 @@ static class WorkspaceServer
         bool elicitation=caps.ContainsKey("elicitation");
         object extObj;bool tasks=caps.TryGetValue("extensions",out extObj)&&extObj is Dictionary<string,object>&&((Dictionary<string,object>)extObj).ContainsKey(TasksExt);
         if(method=="server/discover"){Console.Error.WriteLine("[Workspace] server/discover (modern) | "+Version+" | instance="+InstanceId);Reply(output,new{jsonrpc="2.0",id=id,result=Discover()});return;}
-        if(method=="tools/list"){Console.Error.WriteLine("[Workspace] tools/list (modern) | "+Tools().Length+" tools | "+Version);Reply(output,new{jsonrpc="2.0",id=id,result=ModernWrap(new{tools=Tools(),ttlMs=300000,cacheScope="private"})});return;}
+        if(method=="tools/list"){Console.Error.WriteLine("[Workspace] tools/list (modern) | "+ToolsModern().Length+" tools | "+Version);Reply(output,new{jsonrpc="2.0",id=id,result=ModernWrap(new{tools=ToolsModern(),ttlMs=300000,cacheScope="private"})});return;}
         if(method=="tools/call"){
             string tool=S(p,"name");CurrentTool=tool;
             var args=p.ContainsKey("arguments")&&p["arguments"] is Dictionary<string,object>?(Dictionary<string,object>)p["arguments"]:new Dictionary<string,object>();

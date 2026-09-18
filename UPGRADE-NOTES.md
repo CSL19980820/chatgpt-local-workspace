@@ -1,3 +1,11 @@
+# 2.0.1 升级说明
+
+2026-09-18。修复 ChatGPT 连接器"安全校验未完成，执行被阻断"。
+
+- **根因**：2.0.0 在 `tools/list` 给 24 个工具加了 `data:image/svg+xml;base64` 图标；ChatGPT（legacy 客户端）的连接器安全校验拒绝 data URI 图标，导致所有工具调用（含只读的 get_workspace_status）被宿主侧阻断。
+- **修复**：icons 改为仅 modern 时代下发——legacy `tools/list` 与 1.7.0 逐字节一致（新增回归断言），modern `tools/list` 继续携带 icons；其余 2.0.0 能力（discover/MRTR/Tasks/trace）不受影响。
+- 升级后请在 ChatGPT「设置 → 插件 → 本地工作区 → 信息」刷新工具列表；若仍显示阻断，删除连接器后重新添加（宿主侧缓存了校验失败的元数据快照）。
+
 # 2.0.0 升级说明
 
 2026-09-18。对照 MCP 2026-07-28 规范的协议大版本：升级为 dual-era 服务器，legacy（ChatGPT Tunnel）路径零回归。

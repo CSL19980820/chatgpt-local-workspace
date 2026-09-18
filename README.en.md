@@ -4,7 +4,7 @@
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-green" alt="MIT License"></a>
   <img src="https://img.shields.io/badge/platform-Windows%2010%2F11%20x64-blue" alt="Windows 10/11 x64">
   <img src="https://img.shields.io/badge/.NET%20Framework-4.8-orange" alt=".NET Framework 4.8">
-  <img src="https://img.shields.io/badge/version-2.0.0-brightgreen" alt="v2.0.0">
+  <img src="https://img.shields.io/badge/version-2.0.1-brightgreen" alt="v2.0.1">
 </p>
 
 <p align="center">
@@ -74,7 +74,7 @@ In a new chat, say:
 
 > Call get_workspace_status to confirm the connection
 
-It should return `version: 2.0.0`, `tool_count: 24`, `protocol_versions`, the actual executable path and this process's instance ID. The desktop log shows `initialize`, `tools/list` and tool receipts in order — "tunnel connected" alone does not prove ChatGPT refreshed the tools.
+It should return `version: 2.0.1`, `tool_count: 24`, `protocol_versions`, the actual executable path and this process's instance ID. The desktop log shows `initialize`, `tools/list` and tool receipts in order — "tunnel connected" alone does not prove ChatGPT refreshed the tools.
 
 ## Usage (how tools get called)
 
@@ -210,6 +210,7 @@ Modern-era features activate progressively from the capabilities the client decl
 - **MRTR confirmations for destructive operations**: when the client declares `elicitation`, `apply_patch` and `write_file` overwriting an existing file first return `resultType: "input_required"` with an `elicitation/create` request; the write only happens when the client retries with `inputResponses` + `requestState`. `requestState` is HMAC-SHA256 integrity-protected, bound to the tool name and an argument fingerprint, expires after 10 minutes and is single-use (tamper- and replay-resistant). Clients without the capability see unchanged behaviour.
 - **Tasks extension (`io.modelcontextprotocol/tasks`)**: when the client declares the extension, an `exec_command` still running at yield time returns a standard task handle (`resultType: "task"`) pollable via `tasks/get` and cancellable via `tasks/cancel`; clients without it keep the classic `session_id` result.
 - **OpenTelemetry**: `traceparent` from request `_meta` is journaled with each call, and the dashboard inspector shows the short trace id for correlation with host-side traces.
+- **Tool icons ship in the modern era only**: ChatGPT's (legacy) connector security validation rejects `data:` URI icons and blocks all tool execution, so the legacy `tools/list` stays byte-identical to 1.7.0.
 - Version mismatches return `UnsupportedProtocolVersionError` (-32022); per spec, the modern era no longer answers `ping`.
 
 ## Official references

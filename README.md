@@ -4,7 +4,7 @@
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-green" alt="MIT License"></a>
   <img src="https://img.shields.io/badge/platform-Windows%2010%2F11%20x64-blue" alt="Windows 10/11 x64">
   <img src="https://img.shields.io/badge/.NET%20Framework-4.8-orange" alt=".NET Framework 4.8">
-  <img src="https://img.shields.io/badge/version-2.0.0-brightgreen" alt="v2.0.0">
+  <img src="https://img.shields.io/badge/version-2.0.1-brightgreen" alt="v2.0.1">
 </p>
 
 <p align="center">
@@ -79,7 +79,7 @@
 
 > 调用 get_workspace_status 确认连接
 
-应返回 `version: 2.0.0`、`tool_count: 24`、`protocol_versions`、实际程序路径和进程实例 ID。**原始日志**页签会依次出现 `initialize`、`tools/list` 与工具回执——仅"已连接"不能证明 ChatGPT 已刷新工具。
+应返回 `version: 2.0.1`、`tool_count: 24`、`protocol_versions`、实际程序路径和进程实例 ID。**原始日志**页签会依次出现 `initialize`、`tools/list` 与工具回执——仅"已连接"不能证明 ChatGPT 已刷新工具。
 
 ## 怎么用（调用方式）
 
@@ -222,6 +222,7 @@ modern 时代按客户端声明的能力渐进启用：
 - **MRTR 危险操作确认**：客户端声明 `elicitation` 能力时，`apply_patch` 与覆盖已有文件的 `write_file` 会先返回 `resultType: "input_required"` 与 `elicitation/create` 请求；客户端带 `inputResponses` + `requestState` 重试后才真正执行。`requestState` 经 HMAC-SHA256 完整性保护，绑定工具名与参数指纹、10 分钟过期且一次性消费（防篡改、防重放）。未声明该能力的客户端行为不变。
 - **Tasks 扩展（`io.modelcontextprotocol/tasks`）**：客户端声明该扩展时，仍在运行的 `exec_command` 返回标准任务句柄（`resultType: "task"`），可用 `tasks/get` 轮询、`tasks/cancel` 取消；未声明的客户端继续拿经典 `session_id` 会话结果。
 - **OpenTelemetry**：请求 `_meta` 中的 `traceparent` 会记入操作日志，实时工作台检查器显示 trace 短 ID，便于与宿主侧链路关联。
+- **工具 icons 仅在 modern 时代下发**：ChatGPT（legacy）的连接器安全校验会拒绝 `data:` URI 图标并阻断全部工具执行，因此 legacy `tools/list` 与 1.7.0 保持逐字节一致。
 - 版本不匹配返回 `UnsupportedProtocolVersionError`（-32022）；modern 时代按规范不再响应 `ping`。
 
 ## 官方依据

@@ -12,7 +12,7 @@ const request = (method, params = {}) => new Promise(resolve => { const id = ++s
 const call = async (name, args) => { const r = await request('tools/call', { name, arguments: args }); assert(!r.error, JSON.stringify(r)); return r.result; };
 async function main() {
   assert.equal((await request('initialize', { protocolVersion: '2025-06-18', capabilities: {}, clientInfo: { name: 'test', version: '1' } })).result.serverInfo.name, 'local-workspace');
-  const list = await request('tools/list'); assert.equal(list.result.tools.length, 24); assert.equal(list.result.tools.filter(t=>t._meta.ui.resourceUri).length,0); assert(list.result.tools.every(t=>t.outputSchema&&t._meta['openai/toolInvocation/invoking']));
+  const list = await request('tools/list'); assert.equal(list.result.tools.length, 24); assert.equal(list.result.tools.filter(t=>t._meta.ui.resourceUri).length,0); assert(list.result.tools.every(t=>t.outputSchema&&t._meta['openai/toolInvocation/invoking']));assert(list.result.tools.every(t=>!t.icons),'legacy tools/list must stay icon-free for ChatGPT security validation');
   assert((await request('resources/read', { uri: 'ui://local-workspace/review-v5.html' })).error);
   assert(!(await call('write_file', { path: fixture, content: '第一行\nsecond\n' })).isError); assert((await call('write_file', { path: fixture, content: 'no' })).isError);
   const edit = await call('edit_file', { path: fixture, old_text: 'second', new_text: 'edited' }); assert(!edit.isError); assert.equal(edit.structuredContent.result.diff.added, 1); assert.equal(edit.structuredContent.result.diff.removed, 1);
@@ -42,7 +42,7 @@ async function main() {
   assert.equal((await call('search_files', { path: dir, pattern: '*.cs', recursive: false })).structuredContent.result.matches.length, 0);
   assert.equal((await call('file_info', { path: fixture })).structuredContent.result.size_bytes, fs.statSync(fixture).size);
   console.log('PASS filename/content search, case sensitivity, recursion, Unicode/spaces and file metadata');
-  const status=(await call('get_workspace_status',{})).structuredContent.result;assert.equal(status.version,'2.0.0');assert.equal(status.tool_count,24);assert(status.tools.includes('write_stdin'));assert(status.activity.some(x=>x.status==='failed'));
+  const status=(await call('get_workspace_status',{})).structuredContent.result;assert.equal(status.version,'2.0.1');assert.equal(status.tool_count,24);assert(status.tools.includes('write_stdin'));assert(status.activity.some(x=>x.status==='failed'));
   const created=path.join(root,'new','nested');assert((await call('create_directory',{path:created})).structuredContent.result.created);assert.equal((await call('create_directory',{path:created})).structuredContent.result.created,false);
   const live=(await call('exec_command',{shell:'powershell',command:"Write-Output 'first-output'; Start-Sleep -Seconds 2; Write-Output 'last-output'",cwd:dir,yield_ms:1000})).structuredContent.result;
   const snap1=(await call('read_command',{session_id:live.session_id})).structuredContent.result;assert(snap1.full_output.includes('first-output'));assert.equal(snap1.output_mode,'snapshot');
