@@ -53,6 +53,7 @@ sealed class LocalDashboard : IDisposable
                 else using(var reader=new StreamReader(typeof(LocalDashboard).Assembly.GetManifestResourceStream("dashboard.html")))Send(stream,200,"text/html",reader.ReadToEnd());
             }
             else if(uri.AbsolutePath=="/api/local-actions")Send(stream,200,"application/json",Json.Serialize(new{token=actionToken}));
+            else if(uri.AbsolutePath=="/api/diagnostics")Send(stream,200,"application/json",Json.Serialize(WorkspaceDiagnostics.Read()));
             else if(uri.AbsolutePath.StartsWith("/api/images/",StringComparison.Ordinal)){
                 var image=DashboardImages.Get(uri.AbsolutePath.Substring("/api/images/".Length));
                 if(image==null)Send(stream,404,"text/plain","图片预览已过期，请重新读取图片。");

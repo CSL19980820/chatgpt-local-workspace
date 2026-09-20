@@ -1,7 +1,7 @@
 // Chinese labels for tools and states. Kept in one place so the timeline, the
 // inspector and the tests agree on the wording.
 export const TOOL_TITLES = {
-  file_info: '文件信息', register_conversation: '登记对话', exec_command: '执行命令', read_file: '读取文件',
+  import_file: '接收附件', file_info: '文件信息', register_conversation: '登记对话', exec_command: '执行命令', read_file: '读取文件',
   write_file: '写入文件', edit_file: '编辑文件', apply_patch: '应用补丁', git_status: 'Git 状态',
   git_diff: 'Git 差异', search_text: '搜索内容', search_files: '搜索文件', open_workspace: '打开工作区',
   update_plan: '更新计划', list_directory: '浏览目录', read_command: '读取输出', write_stdin: '继续命令',

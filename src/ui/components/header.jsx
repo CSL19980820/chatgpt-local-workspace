@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Icon } from './icons.jsx';
 
 // One row of context: which conversation is filtered, how much ran, how the sync is doing.
-export function Header({ title, context, chatUrl, counts, sessions, queued, connection, state, paused, onPause, onRefresh }) {
+export function Header({ title, context, chatUrl, counts, sessions, queued, connection, state, paused, onPause, onRefresh, onDiagnostics }) {
   return (
     <header className="workspace-head">
       <h1 id="title" title={title}>{title}</h1>
@@ -26,6 +26,7 @@ export function Header({ title, context, chatUrl, counts, sessions, queued, conn
         <span className="metric summary-failed"><b id="failed">{counts.failed}</b>失败</span>
       </div>
       <span id="connection" className={cn('connection', state)}>{connection}</span>
+      <Button id="diagnostics" variant="ghost" size="icon-sm" aria-label="诊断连接" title="诊断连接" onClick={onDiagnostics}><Icon name="activity" /></Button>
       <Button id="refresh" variant="ghost" size="icon-sm" aria-label="立即同步" title="立即同步" onClick={onRefresh}>
         <Icon name="refresh" />
       </Button>

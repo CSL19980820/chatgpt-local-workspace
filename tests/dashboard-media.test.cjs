@@ -49,7 +49,7 @@ test('actual MCP image receipts, workspace details and local path actions', { ti
     const snapshot = await (await fetch(base + 'api/snapshot')).json();
     const detail = snapshot.activity.find(item => item.tool === 'get_workspace_status').detail;
     assert.equal(detail.kind, 'workspace');
-    assert.equal(detail.tools.length, 24);
+    assert.equal(detail.tools.length, 25);
     assert(detail.workspaces.some(item => item.path === root.replace(/\\/g, '/')));
     assert(detail.info.some(item => item.label === '面板地址' && item.value === base));
     assert(!JSON.stringify(snapshot).includes(receipt.content[1].data));
@@ -83,7 +83,7 @@ test('actual MCP image receipts, workspace details and local path actions', { ti
     await page.locator('#refresh').focus();
     assert.equal(await page.locator('#refresh').evaluate(el => getComputedStyle(el).outlineStyle), 'solid');
     await page.locator('#timeline .event').filter({ hasText: '工作区状态' }).click();
-    assert.match(await page.locator('#detail-body').innerText(), /24 个/);
+    assert.match(await page.locator('#detail-body').innerText(), /25 个/);
     assert.match(await page.locator('#detail-body').innerText(), /图片与工作区验收/);
     assert(await page.locator('#detail-body .path-link').count() >= 3);
     // An actual file gone missing must give useful feedback after a real browser POST.

@@ -333,6 +333,7 @@ static class WorkspaceDetail
     }
     static Dictionary<string,object> Info(string tool,object inner)
     {
+        if(tool=="import_file")return Flag(inner,"created")?InfoRows(new List<object>{Row("保存位置",Display(Text(inner,"path")),true),Row("文件大小",Bytes(Long(inner,"size_bytes"))),Row("文件类型",Text(inner,"mime_type")),Row("SHA256",Text(inner,"sha256"),true),Row("结果","已创建新文件，未覆盖已有内容")},"已接收聊天附件"):InfoRows(new List<object>{Row("结果","未导入附件"),Row("原因",Text(inner,"message"))},"附件导入失败");
         if(tool=="file_info")
         {
             string path=Display(Text(inner,"path"));bool directory=Flag(inner,"directory");

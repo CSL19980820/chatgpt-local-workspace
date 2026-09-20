@@ -92,6 +92,15 @@ button:focus-visible{outline:2px solid var(--ring);outline-offset:3px}
 .workspace-locations>div:first-child{border-top:0}
 .workspace-locations strong{font-weight:500;overflow-wrap:anywhere}
 .workspace-locations .path-action{font:11px var(--font-mono)}
+.diagnostics-dialog{width:min(640px,calc(100vw - 32px));max-width:640px;max-height:85vh;overflow:auto;background:var(--card);color:var(--foreground);border:1px solid var(--border);box-shadow:0 16px 60px #0002}
+.diagnostics-actions{display:flex;align-items:center;justify-content:space-between;color:var(--muted-foreground);font-size:12px}
+.diagnostics-checks{border:1px solid var(--border);border-radius:10px;overflow:hidden}
+.diagnostic-check{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;padding:12px 16px;border-bottom:1px solid var(--border)}
+.diagnostic-check:last-child{border-bottom:0}.diagnostic-check strong{font-size:12px;font-weight:600}.diagnostic-check p{font-size:11px;color:var(--muted-foreground);margin:4px 0 0;overflow-wrap:anywhere}
+.diagnostic-status{font-size:11px;white-space:nowrap;border-radius:20px;padding:3px 9px;background:var(--muted);color:var(--muted-foreground)}
+.diagnostic-status.pass{color:var(--success);background:color-mix(in oklab,var(--success) 10%,transparent)}
+.diagnostic-status.fail{color:var(--destructive);background:color-mix(in oklab,var(--destructive) 10%,transparent)}
+.diagnostic-status.pending{color:var(--warning);background:color-mix(in oklab,var(--warning) 10%,transparent)}
 .image-card{display:flex;flex-direction:column;min-height:0;border:1px solid var(--border);border-radius:12px;overflow:hidden;background:var(--card);flex:1}
 .image-toolbar{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:12px 16px;border-bottom:1px solid var(--border)}
 .image-name{display:flex;align-items:center;gap:8px;min-width:0;overflow-wrap:anywhere;font-weight:600}

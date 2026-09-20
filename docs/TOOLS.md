@@ -1,10 +1,11 @@
-# 工具参数手册（24 个）
+# 工具参数手册（25 个）
 
-本页是 24 个本地工具的输入参数参考，与 `src/WorkspaceServer.cs` 中 `BuildTools()` 注册的 schema 一致。工具由模型按需自动调用，你用自然语言下达任务即可；本页供你核对参数、写自动化或排查调用失败时使用。
+本页是 25 个本地工具的输入参数参考，与 `src/WorkspaceServer.cs` 中 `BuildTools()` 注册的 schema 一致。工具由模型按需自动调用，你用自然语言下达任务即可；本页供你核对参数、写自动化或排查调用失败时使用。
 
 ## 通用约定
 
-- **所有工具都接受可选的 `thread_id`**（string）：`register_conversation` 返回的本地对话 ID。每次调用都带上它，时间线才会按对话隔离；不带的调用进入"未归属（unassigned）"，系统不会猜测归属。`thread_id` 不在下面各工具表中重复列出。
+- **所有工具都接受可选的 `thread_id`**（string）：本地对话 ID。宿主传入请求 `_meta["openai/session"]` 时，服务端按组织、用户、会话组合自动关联；不提供该信号时调用 `register_conversation`，并在后续调用中传入其 `thread_id`。两者皆无时进入“未归属”，不按路径或最近调用猜测。宿主元数据用于关联，不用于认证。显式 ID 与现有宿主会话绑定冲突时拒绝调用。`thread_id` 不在下面各工具表中重复列出。
+- **2.1 返回约定**：`content` 为简短摘要，完整字段读取 `structuredContent.result`；外层同时有 `tool`、`isError` 与 `thread_id`。`read_image` 额外保留原生 image 内容。各工具的 `outputSchema` 描述字段，失败以 `error_code` / `message` 返回；命令失败也可能保留退出码和输出。不要再对摘要文本执行 JSON 解析。
 - **路径必须是绝对路径**，用正斜杠（如 `E:/work/api`）。`apply_patch` 的补丁内文件路径相对于 `cwd`。不要在下划线前插入 Markdown 转义反斜杠。
 - **返回信封**：每个工具返回 `content`（文本，权威结果）+ `structuredContent`（`{tool, result, isError}`）。命令类工具的 `result` 含 `running`、`exit_code`、`timed_out`、`stopped`、`session_id`、`output`、`truncated` 等字段——`isError`、`exit_code≠0`、`running=true` 各有含义：报错不是成功，仍在运行不是完成。
 - **只读 / 写入**：下表"类型"列中，只读工具不改动磁盘；写入工具会改文件或执行命令。工具从不自动 `git commit` 或 `git push`。
@@ -124,6 +125,20 @@
 | 参数 | 类型 | 必填 | 说明 |
 | --- | --- | --- | --- |
 | `path` | string | 是 | 图片绝对路径 |
+
+### `import_file` （写入 / 公网下载）
+将宿主提供的聊天附件保存为本地新文件。通过 `_meta["openai/fileParams"] = ["file"]` 向宿主声明文件参数；聊天是否能提供附件由宿主决定。
+
+| 参数 | 类型 | 必填 | 说明 |
+| --- | --- | --- | --- |
+| `path` | string | 是 | 目标绝对路径；父目录需已存在，目标文件必须不存在 |
+| `file` | object | 是 | 宿主提供的文件对象，字段见下方 |
+| `file.download_url` | string | 是 | HTTPS 签名下载地址，443 端口，不含用户名/密码 |
+| `file.file_id` | string | 是 | 宿主文件 ID，1..512 字符 |
+| `file.mime_type` | string | 否 | 宿主声明的类型，保存回执使用下载响应的 Content-Type |
+| `file.file_name` | string | 否 | 原始名称；不会改变用户指定的目标路径 |
+
+最多 32 MiB，下载期限 45 秒，最多 3 次重定向。失败会清理临时文件，不覆盖已有内容；成功返回 `path`、`file_id`、`mime_type`、`size_bytes`、`sha256` 与 `created: true`。下载 URL 不写入活动详情与本地日志。保存后可继续用其他工具处理；本工具不做文档解析或病毒扫描。
 
 ### `create_directory` （写入）
 创建目录及缺失的父目录。已存在则成功且无改动；不删除或替换文件。

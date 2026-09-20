@@ -1,3 +1,4 @@
+import { DiagnosticsDialog } from './components/diagnostics-dialog.jsx';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { Header } from './components/header.jsx';
@@ -14,6 +15,8 @@ const stored = (key, fallback) => { try { const value = localStorage.getItem(key
 const store = (key, value) => { try { localStorage.setItem(key, String(value)); } catch { /* private mode */ } };
 
 export function App() {
+  const [diagnosticsOpen, setDiagnosticsOpen] = useState(() => location.hash === '#diagnostics');
+  useEffect(() => { const onHash = () => { if (location.hash === '#diagnostics') setDiagnosticsOpen(true); }; window.addEventListener('hashchange', onHash); return () => window.removeEventListener('hashchange', onHash); }, []);
   const [snapshot, setSnapshot] = useState(null);
   const [error, setError] = useState('');
   const [paused, setPaused] = useState(false);
@@ -125,7 +128,7 @@ export function App() {
           onSelect={selectThread} onToggle={() => { setCollapsed(!collapsed); store('workspace-sidebar-collapsed', !collapsed); }}
           onSetup={() => setSetupOpen(true)} />
         <main>
-          <Header title={title} context={current ? current.path : ''} chatUrl={current ? current.chat_url : null}
+          <Header onDiagnostics={() => setDiagnosticsOpen(true)} title={title} context={current ? current.path : ''} chatUrl={current ? current.chat_url : null}
             counts={counts} sessions={snapshot ? (snapshot.commands || []).filter(command => command.running).length : 0}
             queued={snapshot ? snapshot.queued_calls || 0 : 0} connection={connection} state={connectionState}
             paused={paused} onPause={togglePause} onRefresh={() => loadRef.current(true)} />
@@ -145,6 +148,7 @@ export function App() {
           </footer>
         </main>
       </div>
+      <DiagnosticsDialog open={diagnosticsOpen} onOpenChange={value => { setDiagnosticsOpen(value); if (!value && location.hash === '#diagnostics') history.replaceState(null, '', location.pathname + location.search); }} />
       <SetupDialog open={setupOpen} onOpenChange={setSetupOpen} />
     </TooltipProvider>
   );

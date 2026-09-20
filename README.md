@@ -4,7 +4,7 @@
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-green" alt="MIT License"></a>
   <img src="https://img.shields.io/badge/platform-Windows%2010%2F11%20x64-blue" alt="Windows 10/11 x64">
   <img src="https://img.shields.io/badge/.NET%20Framework-4.8-orange" alt=".NET Framework 4.8">
-  <img src="https://img.shields.io/badge/version-2.0.2-brightgreen" alt="v2.0.2">
+  <img src="https://img.shields.io/badge/version-2.1.0-brightgreen" alt="v2.1.0">
 </p>
 
 <p align="center">
@@ -23,7 +23,20 @@
 
 ![补丁审阅视图](docs/images/dashboard-patch-review.png)
 
-## 2.0.2 工作台体验更新
+## 2.1.0：自动归组、附件导入与连接诊断
+
+- **自动识别对话归属**：宿主传入官方 `openai/session` 元数据时，同一对话的调用自动进入同一时间线。没有该信号的客户端继续使用手动登记，不按目录或最近一次调用猜测归属。
+- **接收聊天附件**：新增 `import_file`，按官方文件输入协议将附件保存为本地新文件，返回大小、类型和 SHA256；支持中文文件名，最多 32 MiB，已有文件不会被覆盖。
+- **更精简的模型回执**：`content` 给出简短摘要，完整数据统一放在 `structuredContent.result`；25 个工具分别声明返回字段，减少重复正文。图片仍返回原生 image 内容。
+- **一键诊断**：工作台右上角及桌面“更多 → 诊断连接”检查配置、隧道存活/就绪、MCP 握手、工具发现、成功调用与匿名会话信号。未发生的步骤明确显示待验证，检查不会重启连接。
+
+![连接诊断](docs/images/dashboard-diagnostics.png)
+
+诊断截图来自隔离的本地 MCP 验收进程，因此隧道显示“未检查”。已验证模拟宿主元数据、真实公网 HTTPS 文件导入及浏览器交互；ChatGPT Tunnel 是否转发会话元数据、具体账号是否提供附件选择，仍以实际宿主调用为准。协议依据见 [OpenAI 插件参考](https://developers.openai.com/plugins/reference)、[MCP 工具实现](https://developers.openai.com/plugins/build/mcp-server) 与 [Secure MCP Tunnels](https://developers.openai.com/api/docs/guides/secure-mcp-tunnels)。
+
+升级时退出旧程序后启动新版，在 ChatGPT 设置中刷新工具并新开聊天，核对 `version: 2.1.0`、`tool_count: 25`。读取 `content[0].text` JSON 的自建客户端需改为读取 `structuredContent.result`。完整说明见 [2.1.0 发行说明](docs/RELEASE-2.1.0.md)。
+
+## 延续 2.0.2 的工作台体验
 
 - **看见实际读取的图片**：`read_image` 的时间线详情直接显示本次读取的 PNG、JPEG、GIF 或 WebP，支持适应窗口 / 原始尺寸，并显示尺寸、类型、大小与文件位置。保留读取时的原始字节，之后文件变化不会改写历史预览。
 - **展开工作区状态**：`get_workspace_status` 显示版本、程序路径、面板地址、默认 Shell、运行命令数、已登记工作区及全部工具。
@@ -38,8 +51,8 @@
 
 ## 特性一览
 
-- **24 个本地工具**：文件读写、精确编辑、多文件补丁、搜索、命令执行与增量输出、Git 审阅、执行计划。
-- **双时代 MCP 协议（v2.0）**：同一个 EXE 同时服务 2025-06-18 legacy 客户端（`initialize` 握手，ChatGPT Tunnel 现行方式，行为零变化）与 [2026-07-28](https://modelcontextprotocol.io/specification/2026-07-28) modern 无状态客户端：`server/discover` 能力发现、每请求 `_meta` 版本协商、`resultType`、可缓存 `tools/list`（`ttlMs`/`cacheScope`）、MRTR 危险操作确认、官方 Tasks 扩展长任务句柄、OpenTelemetry trace 关联与工具图标。
+- **25 个本地工具**：文件读写、精确编辑、多文件补丁、搜索、命令执行与增量输出、Git 审阅、执行计划。
+- **双时代 MCP 协议（v2.0）**：同一个 EXE 同时服务 2025-06-18 legacy 客户端（`initialize` 握手，ChatGPT Tunnel 现行方式，兼容握手与调用方式）与 [2026-07-28](https://modelcontextprotocol.io/specification/2026-07-28) modern 无状态客户端：`server/discover` 能力发现、每请求 `_meta` 版本协商、`resultType`、可缓存 `tools/list`（`ttlMs`/`cacheScope`）、MRTR 危险操作确认、官方 Tasks 扩展长任务句柄、OpenTelemetry trace 关联与工具图标。
 - **内嵌实时工作台**：桌面程序首个页签直接嵌入工作台页面（WebView2，随系统 Edge 附带；缺运行时自动回退浏览器），每秒同步，按对话隔离时间线，检查器按调用类型渲染（图片、工作区状态、diff、命令输出、读取正文、搜索命中）。
 - **一体化桌面外壳**：单行工具栏（启动/停止合一、在浏览器打开、更多菜单）+ 四个页签（实时工作台 / 操作记录 / 原始日志 / 连接配置）；操作记录与原始日志为自绘视图，按级别着色、等宽排版、尾随跟随。
 - **Codex 风格工作流**：`open_workspace` 读取 AGENTS.md 约定 → `update_plan` 展示计划 → `apply_patch` 预验证后提交多文件补丁。
@@ -84,7 +97,7 @@
 
 ### 4. 在 ChatGPT 中刷新插件
 
-打开 ChatGPT 网页版"设置 → 连接器（Connectors）→ 本地工作区"，滚动到底部"信息"，点击**刷新**（这是开发者连接设置页；应用详情页只有"重新连接"时请进入设置页操作）。成功后操作列表应包含 24 个工具。
+打开 ChatGPT 网页版"设置 → 连接器（Connectors）→ 本地工作区"，滚动到底部"信息"，点击**刷新**（这是开发者连接设置页；应用详情页只有"重新连接"时请进入设置页操作）。成功后操作列表应包含 25 个工具。
 
 ### 5. 验证
 
@@ -92,7 +105,7 @@
 
 > 调用 get_workspace_status 确认连接
 
-应返回 `version: 2.0.2`、`tool_count: 24`、`protocol_versions`、实际程序路径和进程实例 ID。**原始日志**页签会依次出现 `initialize`、`tools/list` 与工具回执——仅"已连接"不能证明 ChatGPT 已刷新工具。
+应返回 `version: 2.1.0`、`tool_count: 25`、`protocol_versions`、实际程序路径和进程实例 ID。**原始日志**页签会依次出现 `initialize`、`tools/list` 与工具回执——仅"已连接"不能证明 ChatGPT 已刷新工具。
 
 ## 怎么用（调用方式）
 
@@ -118,15 +131,21 @@
 
 ### 打开实时工作台
 
-连接后桌面程序的"实时工作台"页签已内嵌该页面；想在更大窗口或多屏观察时用工具栏**在浏览器打开**。每个新对话**通常无需你手动要求登记**：模型在 `initialize` 时已被指示先调用 `register_conversation`，且标题可省略（自动用工作目录名派生），所以你最多只需点明目录：
+连接后桌面程序的“实时工作台”页签已内嵌该页面；想在更大窗口或多屏观察时用工具栏**在浏览器打开**。宿主提供 `openai/session` 时自动归组，标题默认使用工作目录名；不提供时，模型先调用 `register_conversation` 并在后续请求中传入返回的 `thread_id`。你只需点明目录：
 
 > 这个对话在 E:/work/pay 上做支付模块重构
 
 工具会返回本地线程 ID 和直达该线程的工作台链接，之后的调用在时间线中按对话隔离展示。想自定义名称就补一句标题；想绑定真实 ChatGPT 会话可让模型带上已知的 `chat_id`（相同 `chat_id` 复用同一线程）。
 
-> **为什么不能全自动归属**：一个隧道 / 进程可能同时服务多个 ChatGPT 对话，而宿主不会传入可区分对话的信号。因此没有 `thread_id` 的调用一律进入"未归属"，系统不会按目录或时间猜测归属——这是刻意的隔离取舍，不是缺陷。要精确隔离，就让每个对话各自登记并带上自己的 `thread_id`。
+> **归属边界**：`openai/session` 是匿名关联信号，不是 ChatGPT `/c/` 链接中的真实 ID，也不是身份认证。服务端在当前进程内按组织、用户和会话组合散列后关联；重启后需重新建立关联。既无宿主信号也无 `thread_id` 的调用进入“未归属”。
 
-## 24 个工具
+### 将聊天附件保存到本地
+
+> 把这个聊天中的附件保存为 E:/projects/demo/inbox/需求说明.pdf
+
+宿主支持文件输入时，模型调用 `import_file`；目标目录必须已存在，目标文件必须不存在。下载使用 HTTPS，失败不会留下半个目标文件。保存后可继续调用 `read_file`、`read_image` 或其他工具处理。签名下载链接不写入本地日志或工作台回执；此能力取决于宿主是否提供附件参数。
+
+## 25 个工具
 
 > 完整的输入参数、类型与返回字段见 [docs/TOOLS.md](docs/TOOLS.md)。下表只按用途归类。
 
@@ -138,6 +157,7 @@
 | 实际连接、版本与活动诊断 | `get_workspace_status` |
 | 目录、文件属性和搜索 | `list_directory`、`file_info`、`search_files`、`search_text` |
 | 读取文本和图片 | `read_file`、`read_image` |
+| 接收聊天附件并保存新文件 | `import_file` |
 | 创建目录、写入与精确编辑 | `create_directory`、`write_file`、`edit_file` |
 | 执行命令、发送标准输入 | `exec_command`、`write_stdin` |
 | 命令列表、增量输出、只读快照、停止 | `list_commands`、`poll_command`、`read_command`、`stop_command` |
@@ -203,7 +223,7 @@ node --test tests/dashboard-media.test.cjs   # 实际 MCP 图片、状态和本�
 
 ## 常见问题
 
-**ChatGPT 说它只能读、不能改？** 先让它调用 `get_workspace_status`，核对版本、`tool_count: 24` 与连接状态；再在设置页刷新元数据并新开聊天。不要把旧聊天缓存、旧插件或未运行的服务当成系统权限不足。
+**ChatGPT 说它只能读、不能改？** 先让它调用 `get_workspace_status`，核对版本、`tool_count: 25` 与连接状态；再在设置页刷新元数据并新开聊天。不要把旧聊天缓存、旧插件或未运行的服务当成系统权限不足。
 
 **"已连接"但工具没反应？** 隧道连接 ≠ ChatGPT 已刷新工具。原始日志必须出现 `initialize` 与 `tools/list` 才算打通。
 
@@ -229,7 +249,7 @@ node --test tests/dashboard-media.test.cjs   # 实际 MCP 图片、状态和本�
 
 | 时代 | 触发方式 | 提供的能力 |
 | --- | --- | --- |
-| legacy（2025-06-18） | `initialize` 握手（ChatGPT Tunnel 现行方式） | 与 1.7.0 完全一致：24 个工具、进度通知、结构化输出 |
+| legacy（2025-06-18） | `initialize` 握手（ChatGPT Tunnel 现行方式） | 兼容原有握手：25 个工具、进度通知、结构化输出 |
 | modern（[2026-07-28](https://modelcontextprotocol.io/specification/2026-07-28)） | 请求 `_meta` 携带 `io.modelcontextprotocol/protocolVersion` | 无状态每请求协商、`server/discover`、`resultType`、`tools/list` 缓存字段（`ttlMs`/`cacheScope: private`）、`serverInfo` 回执标识 |
 
 modern 时代按客户端声明的能力渐进启用：
@@ -237,7 +257,7 @@ modern 时代按客户端声明的能力渐进启用：
 - **MRTR 危险操作确认**：客户端声明 `elicitation` 能力时，`apply_patch` 与覆盖已有文件的 `write_file` 会先返回 `resultType: "input_required"` 与 `elicitation/create` 请求；客户端带 `inputResponses` + `requestState` 重试后才真正执行。`requestState` 经 HMAC-SHA256 完整性保护，绑定工具名与参数指纹、10 分钟过期且一次性消费（防篡改、防重放）。未声明该能力的客户端行为不变。
 - **Tasks 扩展（`io.modelcontextprotocol/tasks`）**：客户端声明该扩展时，仍在运行的 `exec_command` 返回标准任务句柄（`resultType: "task"`），可用 `tasks/get` 轮询、`tasks/cancel` 取消；未声明的客户端继续拿经典 `session_id` 会话结果。
 - **OpenTelemetry**：请求 `_meta` 中的 `traceparent` 会记入操作日志，实时工作台检查器显示 trace 短 ID，便于与宿主侧链路关联。
-- **工具 icons 仅在 modern 时代下发**：ChatGPT（legacy）的连接器安全校验会拒绝 `data:` URI 图标并阻断全部工具执行，因此 legacy `tools/list` 与 1.7.0 保持逐字节一致。
+- **工具 icons 仅在 modern 时代下发**：ChatGPT（legacy）的连接器安全校验会拒绝 `data:` URI 图标并阻断工具执行，因此 legacy `tools/list` 保持无图标；2.1 的文件输入元数据和返回 schema 仍会正常下发。
 - 版本不匹配返回 `UnsupportedProtocolVersionError`（-32022）；modern 时代按规范不再响应 `ping`。
 
 ## 官方依据

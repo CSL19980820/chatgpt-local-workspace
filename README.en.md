@@ -4,7 +4,7 @@
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-green" alt="MIT License"></a>
   <img src="https://img.shields.io/badge/platform-Windows%2010%2F11%20x64-blue" alt="Windows 10/11 x64">
   <img src="https://img.shields.io/badge/.NET%20Framework-4.8-orange" alt=".NET Framework 4.8">
-  <img src="https://img.shields.io/badge/version-2.0.2-brightgreen" alt="v2.0.2">
+  <img src="https://img.shields.io/badge/version-2.1.0-brightgreen" alt="v2.1.0">
 </p>
 
 <p align="center">
@@ -23,10 +23,23 @@ Let ChatGPT work directly on your machine through the **official OpenAI tunnel**
 
 ![Patch review view](docs/images/dashboard-patch-review.png)
 
-## What's new in 2.0.2
+## New in 2.1.0: session grouping, attachments and diagnostics
+
+- **Automatic conversation grouping:** calls carrying official `openai/session` metadata share a local timeline. Clients without that metadata retain explicit registration and `thread_id` support.
+- **Chat attachment import:** the new `import_file` tool accepts the official file input contract and creates a new local file, up to 32 MiB, with a size, MIME type and SHA256 receipt. Existing destinations are never overwritten.
+- **Concise receipts:** `content` is a short summary; full data is in `structuredContent.result`. Each of the 25 tools declares its output shape. Image reads still return native image content.
+- **Connection diagnostics:** the dashboard header and desktop More menu check configuration, tunnel liveness/readiness, handshake, tool discovery, successful calls and session metadata. Unobserved steps remain pending; checks do not restart connections.
+
+![Connection diagnostics](docs/images/dashboard-diagnostics.png)
+
+The screenshot comes from an isolated local MCP test process, so tunnel checks are unavailable. Synthetic host metadata, real public HTTPS downloads and browser interactions were tested. Session forwarding and attachment selection in an actual ChatGPT account remain host-dependent. Based on the official [plugin reference](https://developers.openai.com/plugins/reference), [MCP server guide](https://developers.openai.com/plugins/build/mcp-server) and [Secure MCP Tunnels guide](https://developers.openai.com/api/docs/guides/secure-mcp-tunnels).
+
+Exit the old application before launching the new binary, refresh ChatGPT tools, and verify `version: 2.1.0` / `tool_count: 25` in a new conversation. Custom clients parsing JSON from `content[0].text` must switch to `structuredContent.result`. See [release notes](docs/RELEASE-2.1.0.md).
+
+## Retained from 2.0.2
 
 - **Actual image previews:** inspect the exact PNG, JPEG, GIF or WebP bytes returned by `read_image`, switch between fit and original size, and see dimensions, format, size and location. Later file edits do not change a captured preview.
-- **Useful workspace status:** version, executable, dashboard URL, shell, running commands, registered workspace paths and all 24 tools appear in the inspector.
+- **Useful workspace status:** version, executable, dashboard URL, shell, running commands, registered workspace paths and all 25 tools appear in the inspector.
 - **Open locations in Windows:** click workspace paths, file details, directory entries, search results, patch paths and command working directories. Directories open in Explorer; files are selected in Explorer; HTTP/HTTPS links open in the default browser. Clicking an executable or script does not run it.
 - **Consistent controls:** soft button surfaces replace native black outlines, with visible keyboard focus and light/dark support.
 
@@ -38,8 +51,8 @@ Screenshots use sample data. Image previews live only in the current process, bo
 
 ## Features
 
-- **24 local tools**: file read/write, precise edits, multi-file patches, search, command execution with incremental output, Git review, execution plans.
-- **Dual-era MCP protocol (v2.0)**: one EXE serves both legacy 2025-06-18 clients (`initialize` handshake — what the ChatGPT Tunnel uses today, behaviour unchanged) and modern [2026-07-28](https://modelcontextprotocol.io/specification/2026-07-28) stateless clients: `server/discover`, per-request `_meta` version negotiation, `resultType`, cacheable `tools/list` (`ttlMs`/`cacheScope`), MRTR confirmations for destructive operations, the official Tasks extension for long-running commands, OpenTelemetry trace correlation and tool icons.
+- **25 local tools**: file read/write, precise edits, multi-file patches, search, command execution with incremental output, Git review, execution plans.
+- **Dual-era MCP protocol (v2.0)**: one EXE serves both legacy 2025-06-18 clients (`initialize` handshake — what the ChatGPT Tunnel uses today, compatible handshake and calls) and modern [2026-07-28](https://modelcontextprotocol.io/specification/2026-07-28) stateless clients: `server/discover`, per-request `_meta` version negotiation, `resultType`, cacheable `tools/list` (`ttlMs`/`cacheScope`), MRTR confirmations for destructive operations, the official Tasks extension for long-running commands, OpenTelemetry trace correlation and tool icons.
 - **Standalone live dashboard**: a locally compiled React + shadcn/ui single-page app, synced every second, timelines isolated per conversation, inspector rendered per call type (diffs, command output, file content, search hits). The desktop app embeds it in its first tab (WebView2; falls back to the browser when the runtime is missing).
 - **One-piece desktop shell**: single-row toolbar (combined start/stop, open in browser, more menu) plus four tabs (workbench / operation log / raw log / connection settings); the log views are owner-drawn with level colors, monospace type and tail-follow.
 - **Codex-style workflow**: `open_workspace` reads AGENTS.md conventions → `update_plan` shows real steps → `apply_patch` pre-validates then applies multi-file patches.
@@ -79,7 +92,7 @@ Launch `LocalWorkspace.exe`, paste the Tunnel ID and API Key, click **Start**. S
 
 ### 4. Refresh the plugin in ChatGPT
 
-Open ChatGPT web → **Settings → Connectors → Local Workspace**, scroll to the bottom and click **Refresh** (this is the developer connection page; if the app detail page only shows "Reconnect", use the settings page instead). The action list should then contain all 24 tools.
+Open ChatGPT web → **Settings → Connectors → Local Workspace**, scroll to the bottom and click **Refresh** (this is the developer connection page; if the app detail page only shows "Reconnect", use the settings page instead). The action list should then contain all 25 tools.
 
 ### 5. Verify
 
@@ -87,7 +100,7 @@ In a new chat, say:
 
 > Call get_workspace_status to confirm the connection
 
-It should return `version: 2.0.2`, `tool_count: 24`, `protocol_versions`, the actual executable path and this process's instance ID. The desktop log shows `initialize`, `tools/list` and tool receipts in order — "tunnel connected" alone does not prove ChatGPT refreshed the tools.
+It should return `version: 2.1.0`, `tool_count: 25`, `protocol_versions`, the actual executable path and this process's instance ID. The desktop log shows `initialize`, `tools/list` and tool receipts in order — "tunnel connected" alone does not prove ChatGPT refreshed the tools.
 
 ## Usage (how tools get called)
 
@@ -113,15 +126,21 @@ All tools are invoked automatically by the model — you just describe the task.
 
 ### Open the live dashboard
 
-After connecting, click **Open live dashboard** in the desktop app — a browser page synced from your machine every second, independent of ChatGPT cards. You usually **don't have to ask the model to register**: it is instructed at `initialize` to call `register_conversation` first, and the title is optional (auto-derived from the directory name), so at most you just state the directory:
+After connecting, use the embedded workbench or **Open in browser**. Calls are grouped automatically when the host provides `openai/session`; otherwise, the model registers the conversation and passes its `thread_id`. Titles default to the workspace directory name. State the directory:
 
 > This chat is refactoring the payment module under E:/work/pay
 
 The tool returns a local thread ID and a direct dashboard link; subsequent calls are grouped per conversation in the timeline. Add a title to customize the name, or have the model pass a known `chat_id` to bind the real ChatGPT conversation (the same `chat_id` reuses one thread).
 
-> **Why assignment can't be fully automatic**: one tunnel/process can serve several ChatGPT conversations at once, and the host passes no signal that distinguishes them. So calls without a `thread_id` land in "Unassigned" and are never guessed into a thread by directory or time — a deliberate isolation tradeoff, not a gap. For precise isolation, register each conversation and pass its own `thread_id`.
+> **Association boundaries:** `openai/session` is an anonymous correlation hint, not a ChatGPT `/c/` ID or authentication. The server hashes organization, subject and session together and retains the association only for the current process. Calls without metadata or `thread_id` remain unassigned.
 
-## The 24 tools
+### Save a chat attachment locally
+
+> Save this chat attachment as E:/projects/demo/inbox/requirements.pdf
+
+When the host provides file input, the model uses `import_file`. The destination directory must exist and the destination file must be new. HTTPS download failures do not leave a partial destination. Signed URLs are excluded from local logs and receipts. Once saved, other tools can read or process the file. Host attachment support is required.
+
+## The 25 tools
 
 > Full input parameters, types and return fields are in [docs/TOOLS.md](docs/TOOLS.md). The table below only groups them by purpose.
 
@@ -133,6 +152,7 @@ The tool returns a local thread ID and a direct dashboard link; subsequent calls
 | Connection, version & activity diagnostics | `get_workspace_status` |
 | Directories, file metadata & search | `list_directory`, `file_info`, `search_files`, `search_text` |
 | Read text and images | `read_file`, `read_image` |
+| Save chat attachments to new local files | `import_file` |
 | Create directories, write & precise edits | `create_directory`, `write_file`, `edit_file` |
 | Run commands, send stdin | `exec_command`, `write_stdin` |
 | Command list, incremental output, snapshots, stop | `list_commands`, `poll_command`, `read_command`, `stop_command` |
@@ -193,7 +213,7 @@ Verification records: [VERIFICATION.md](VERIFICATION.md). Upgrade notes: [UPGRAD
 
 ## Troubleshooting
 
-**ChatGPT claims it can only read?** Have it call `get_workspace_status` and check version, `tool_count: 24` and connection; then refresh metadata in settings and open a new chat. Don't blame OS permissions for stale chat caches, old plugin versions or a service that isn't running.
+**ChatGPT claims it can only read?** Have it call `get_workspace_status` and check version, `tool_count: 25` and connection; then refresh metadata in settings and open a new chat. Don't blame OS permissions for stale chat caches, old plugin versions or a service that isn't running.
 
 **"Tunnel connected" but tools don't respond?** Tunnel connectivity ≠ ChatGPT refreshed the tools. The desktop log must show `initialize` and `tools/list`.
 
@@ -215,7 +235,7 @@ The server is a **dual-era** implementation: it picks its behaviour from how the
 
 | Era | Trigger | What you get |
 | --- | --- | --- |
-| legacy (2025-06-18) | `initialize` handshake (what the ChatGPT Tunnel uses today) | Identical to 1.7.0: 24 tools, progress notifications, structured output |
+| legacy (2025-06-18) | `initialize` handshake (what the ChatGPT Tunnel uses today) | Compatible handshake: 25 tools, progress notifications, structured output |
 | modern ([2026-07-28](https://modelcontextprotocol.io/specification/2026-07-28)) | request `_meta` carries `io.modelcontextprotocol/protocolVersion` | Stateless per-request negotiation, `server/discover`, `resultType`, cacheable `tools/list` (`ttlMs`/`cacheScope: private`), `serverInfo` on every result |
 
 Modern-era features activate progressively from the capabilities the client declares:
@@ -223,7 +243,7 @@ Modern-era features activate progressively from the capabilities the client decl
 - **MRTR confirmations for destructive operations**: when the client declares `elicitation`, `apply_patch` and `write_file` overwriting an existing file first return `resultType: "input_required"` with an `elicitation/create` request; the write only happens when the client retries with `inputResponses` + `requestState`. `requestState` is HMAC-SHA256 integrity-protected, bound to the tool name and an argument fingerprint, expires after 10 minutes and is single-use (tamper- and replay-resistant). Clients without the capability see unchanged behaviour.
 - **Tasks extension (`io.modelcontextprotocol/tasks`)**: when the client declares the extension, an `exec_command` still running at yield time returns a standard task handle (`resultType: "task"`) pollable via `tasks/get` and cancellable via `tasks/cancel`; clients without it keep the classic `session_id` result.
 - **OpenTelemetry**: `traceparent` from request `_meta` is journaled with each call, and the dashboard inspector shows the short trace id for correlation with host-side traces.
-- **Tool icons ship in the modern era only**: ChatGPT's (legacy) connector security validation rejects `data:` URI icons and blocks all tool execution, so the legacy `tools/list` stays byte-identical to 1.7.0.
+- **Tool icons ship in the modern era only**: ChatGPT's legacy connector validation rejects `data:` URI icons, so legacy discovery remains icon-free while exposing the new file input metadata and output schemas.
 - Version mismatches return `UnsupportedProtocolVersionError` (-32022); per spec, the modern era no longer answers `ping`.
 
 ## Official references
