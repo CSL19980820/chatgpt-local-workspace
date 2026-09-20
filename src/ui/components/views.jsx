@@ -1,3 +1,5 @@
+import { PathLink, AddressValue } from './path-link.jsx';
+import { ImageView } from './image-view.jsx';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
@@ -8,13 +10,13 @@ import { OPERATIONS } from '@/lib/labels.js';
 import { liveElapsed } from '@/lib/rows.js';
 
 // shadcn Card keeps the shell, the dense ".card" recipe keeps the data-grid look.
-function Box({ badge, badgeClass, title, hint, right, children, className }) {
+function Box({ badge, badgeClass, title, hint, right, children, className, path }) {
   return (
     <Card className={'card gap-0 py-0 rounded-lg ' + (className || '')}>
       {(badge || title)
         ? <CardHeader className="card-head flex flex-row items-center gap-2 p-0">
             {badge ? <Badge variant="secondary" className={'badge ' + (badgeClass || '')}>{badge}</Badge> : null}
-            {title ? <span className="card-title" title={hint || undefined}>{title}</span> : null}
+            {title ? <span className="card-title" title={hint || undefined}><PathLink value={path || hint || title}>{title}</PathLink></span> : null}
             {right ? <span className="counts">{right}</span> : null}
           </CardHeader>
         : null}
@@ -32,7 +34,7 @@ const Rows = ({ rows }) => (
     {rows.filter(row => row && row.value !== undefined && row.value !== null && row.value !== '').map((row, index) => (
       <div key={index} className={'row' + (row.stack ? ' stack' : '')}>
         <span className="label">{row.label}</span>
-        <span className={'value' + (row.mono ? ' mono' : '')}>{row.value}</span>
+        <span className={'value' + (row.mono ? ' mono' : '')}><AddressValue value={row.value} /></span>
       </div>
     ))}
   </div>
@@ -71,6 +73,15 @@ export function DetailViews({ row, now }) {
   if (!detail) return null;
   const kind = detail.kind;
 
+  if (kind === 'image') return <ImageView key={row.id} detail={detail} />;
+  if (kind === 'workspace') return <>
+    <Box badge="连接诊断" title={detail.summary}><Rows rows={detail.info || []} /></Box>
+    <Box badge="已登记工作区" title={(detail.workspaces || []).length + ' 个对话'}>
+      {(detail.workspaces || []).length ? <div className="workspace-locations">{detail.workspaces.map((item, index) => <div key={index}><strong>{item.title}</strong><PathLink value={item.path} /></div>)}</div> : <div className="card-body"><Note>尚未登记工作区。登记对话后会在这里显示目录。</Note></div>}
+    </Box>
+    <Box badge="可用工具" title={(detail.tools || []).length + ' 个'}><div className="tool-list">{(detail.tools || []).map(tool => <Badge variant="secondary" key={tool}>{tool}</Badge>)}</div></Box>
+  </>;
+
   if (kind === 'write') {
     // A rejected write reports paths only: no operation, size or diff may be shown.
     const rejected = detail.applied === false;
@@ -86,7 +97,7 @@ export function DetailViews({ row, now }) {
           return (
             <Box key={index} badge={rejected ? '未写入' : OPERATIONS[file.operation] || '修改'} badgeClass={rejected ? 'failed' : file.operation}
               className={index === 0 && !rejected ? 'fill' : ''}
-              title={file.name || file.path} right={!rejected && (diff.added || diff.removed) ? <Counts added={diff.added || 0} removed={diff.removed || 0} /> : null}>
+              title={file.name || file.path} path={file.path} right={!rejected && (diff.added || diff.removed) ? <Counts added={diff.added || 0} removed={diff.removed || 0} /> : null}>
               <Rows rows={rows} />
               {rejected ? null : <Diff diff={file.diff} region={index === 0} />}
             </Box>
@@ -101,7 +112,7 @@ export function DetailViews({ row, now }) {
             </Box>
           : null}
         {detail.omitted_files ? <Note>另有 {detail.omitted_files} 个文件未在此处展开。</Note> : null}
-        {detail.root ? <Note>工作目录 {detail.root}</Note> : null}
+        {detail.root ? <Note>工作目录 <PathLink value={detail.root} /></Note> : null}
         {detail.partial ? <Alert>补丁没有全部写入，上面只列出已经生效的文件。</Alert> : null}
       </>
     );
@@ -159,9 +170,9 @@ export function DetailViews({ row, now }) {
               ? matches.map((match, index) => (
                   <div key={index} className="match">
                     <div className="match-place">
-                      <span className="card-title">{match.name || match.path}</span>
+                      <span className="card-title"><PathLink value={match.path}>{match.name || match.path}</PathLink></span>
                       <span className="place">{match.line == null ? '' : ':' + match.line}{match.column == null ? '' : ':' + match.column}</span>
-                      <span className="place">{match.path}</span>
+                      <span className="place"><PathLink value={match.path} /></span>
                     </div>
                     <div className="match-text">{match.text || ''}</div>
                   </div>
@@ -197,7 +208,7 @@ export function DetailViews({ row, now }) {
           {stopped ? <span className="bad">已停止</span> : null}
           <span>运行 {duration(elapsed)}</span>
           {detail.shell ? <span>{detail.shell}</span> : null}
-          {detail.cwd ? <span>{detail.cwd}</span> : null}
+          {detail.cwd ? <PathLink value={detail.cwd} /> : null}
         </div>
       </Box>
     );
@@ -212,7 +223,7 @@ export function DetailViews({ row, now }) {
             ? entries.map((entry, index) => (
                 <div key={index} className="entry">
                   <span className="mark"><Icon name={entry.directory ? 'folder' : 'file'} /></span>
-                  <span className="name">{entry.name}</span>
+                  <span className="name"><PathLink value={entry.path}>{entry.name}</PathLink></span>
                 </div>
               ))
             : <div className="card-body"><Note>目录是空的。</Note></div>}

@@ -1,3 +1,4 @@
+import { PathLink } from './path-link.jsx';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
@@ -40,7 +41,7 @@ export function DetailPane({ row, now, snapshot, onCopy, copied }) {
         <Separator orientation="vertical" className="h-4" />
         <span id="detail-state" className="detail-meta">{meta}</span>
         <span className="spacer" />
-        <Button id="copy-detail" variant="ghost" size="xs" hidden={!row} onClick={onCopy}>{copied ? '已复制' : '复制'}</Button>
+        <Button id="copy-detail" variant="ghost" size="sm" hidden={!row} onClick={onCopy}>{copied ? '已复制' : '复制'}</Button>
       </div>
       <div id="detail-body" tabIndex={0} aria-label="调用详情内容">
         {!row
@@ -54,13 +55,13 @@ export function DetailPane({ row, now, snapshot, onCopy, copied }) {
                     ? '当前服务端是旧版本，没有返回文件、行号与命令输出。更新本地工作区插件并重启后，这里会显示每次调用实际做了什么。'
                     : '调用返回后这里会显示它所做的事。'} />
                 : null}
-              {detail && detail.target && detail.kind !== 'read'
+              {detail && detail.target && !['read', 'image'].includes(detail.kind)
                 ? (
                   <>
                     <Separator className="mt-2" />
                     <Tooltip>
                       <TooltipTrigger asChild>
-                        <div className="detail-foot"><span>{detail.target}</span></div>
+                        <div className="detail-foot"><PathLink value={detail.target} /></div>
                       </TooltipTrigger>
                       <TooltipContent>{detail.target}</TooltipContent>
                     </Tooltip>

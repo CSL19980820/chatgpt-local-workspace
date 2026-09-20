@@ -9,7 +9,7 @@ const { spawn } = require('node:child_process');
 const { launchDashboardBrowser } = require('../scripts/browser-launch.cjs');
 
 const root = path.resolve(__dirname, '..');
-const rowCount = 17; // scripts/sample-snapshot.cjs
+const rowCount = 19; // scripts/sample-snapshot.cjs
 
 const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
 

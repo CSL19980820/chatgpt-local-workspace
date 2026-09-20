@@ -1,13 +1,13 @@
 // Outline icons come from lucide-react (ISC). The name map keeps the rest of the code
 // readable and lets tests look icons up by name.
 import {
-  Layers, PanelLeft, ExternalLink, RefreshCw, Hash, Plus, Minus, ListChecks, ChevronDown,
+  Image, Layers, PanelLeft, ExternalLink, RefreshCw, Hash, Plus, Minus, ListChecks, ChevronDown,
   ChevronRight, Search, Terminal, File, FilePen, FileText, Folder, GitBranch, Info,
   TriangleAlert, Check, Circle, CircleDot, LoaderCircle, Copy, X, Clock, Activity, Timer,
 } from 'lucide-react';
 
 const ICONS = {
-  layers: Layers, dot: CircleDot, circle: Circle, check: Check, x: X, loader: LoaderCircle,
+  image: Image, layers: Layers, dot: CircleDot, circle: Circle, check: Check, x: X, loader: LoaderCircle,
   chevron: ChevronDown, chevronRight: ChevronRight, plus: Plus, minus: Minus, hash: Hash,
   alert: TriangleAlert, info: Info, file: File, filePen: FilePen, fileText: FileText,
   search: Search, terminal: Terminal, folder: Folder, listChecks: ListChecks, refresh: RefreshCw,

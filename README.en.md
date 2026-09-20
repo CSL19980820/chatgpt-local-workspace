@@ -4,7 +4,7 @@
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-green" alt="MIT License"></a>
   <img src="https://img.shields.io/badge/platform-Windows%2010%2F11%20x64-blue" alt="Windows 10/11 x64">
   <img src="https://img.shields.io/badge/.NET%20Framework-4.8-orange" alt=".NET Framework 4.8">
-  <img src="https://img.shields.io/badge/version-2.0.1-brightgreen" alt="v2.0.1">
+  <img src="https://img.shields.io/badge/version-2.0.2-brightgreen" alt="v2.0.2">
 </p>
 
 <p align="center">
@@ -22,6 +22,19 @@ Let ChatGPT work directly on your machine through the **official OpenAI tunnel**
 | ![Desktop app](docs/images/desktop-app.png) | ![Dashboard](docs/images/dashboard-timeline.png) |
 
 ![Patch review view](docs/images/dashboard-patch-review.png)
+
+## What's new in 2.0.2
+
+- **Actual image previews:** inspect the exact PNG, JPEG, GIF or WebP bytes returned by `read_image`, switch between fit and original size, and see dimensions, format, size and location. Later file edits do not change a captured preview.
+- **Useful workspace status:** version, executable, dashboard URL, shell, running commands, registered workspace paths and all 24 tools appear in the inspector.
+- **Open locations in Windows:** click workspace paths, file details, directory entries, search results, patch paths and command working directories. Directories open in Explorer; files are selected in Explorer; HTTP/HTTPS links open in the default browser. Clicking an executable or script does not run it.
+- **Consistent controls:** soft button surfaces replace native black outlines, with visible keyboard focus and light/dark support.
+
+| Image preview | Workspace status |
+| --- | --- |
+| ![Image preview](docs/images/dashboard-image-preview.png) | ![Workspace status](docs/images/dashboard-workspace-status.png) |
+
+Screenshots use sample data. Image previews live only in the current process, bounded by 100 images or 32 MiB, whichever is reached first. Evicted previews and previews from a previous process require another read. Windows open actions require a same-origin POST and the current process token.
 
 ## Features
 
@@ -74,7 +87,7 @@ In a new chat, say:
 
 > Call get_workspace_status to confirm the connection
 
-It should return `version: 2.0.1`, `tool_count: 24`, `protocol_versions`, the actual executable path and this process's instance ID. The desktop log shows `initialize`, `tools/list` and tool receipts in order — "tunnel connected" alone does not prove ChatGPT refreshed the tools.
+It should return `version: 2.0.2`, `tool_count: 24`, `protocol_versions`, the actual executable path and this process's instance ID. The desktop log shows `initialize`, `tools/list` and tool receipts in order — "tunnel connected" alone does not prove ChatGPT refreshed the tools.
 
 ## Usage (how tools get called)
 

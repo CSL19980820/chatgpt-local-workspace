@@ -4,7 +4,7 @@
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-green" alt="MIT License"></a>
   <img src="https://img.shields.io/badge/platform-Windows%2010%2F11%20x64-blue" alt="Windows 10/11 x64">
   <img src="https://img.shields.io/badge/.NET%20Framework-4.8-orange" alt=".NET Framework 4.8">
-  <img src="https://img.shields.io/badge/version-2.0.1-brightgreen" alt="v2.0.1">
+  <img src="https://img.shields.io/badge/version-2.0.2-brightgreen" alt="v2.0.2">
 </p>
 
 <p align="center">
@@ -23,11 +23,24 @@
 
 ![补丁审阅视图](docs/images/dashboard-patch-review.png)
 
+## 2.0.2 工作台体验更新
+
+- **看见实际读取的图片**：`read_image` 的时间线详情直接显示本次读取的 PNG、JPEG、GIF 或 WebP，支持适应窗口 / 原始尺寸，并显示尺寸、类型、大小与文件位置。保留读取时的原始字节，之后文件变化不会改写历史预览。
+- **展开工作区状态**：`get_workspace_status` 显示版本、程序路径、面板地址、默认 Shell、运行命令数、已登记工作区及全部工具。
+- **点击路径打开 Windows**：工作区目录、文件详情、目录条目、搜索结果、补丁路径与命令工作目录均可点击。目录在资源管理器中打开，文件在资源管理器中选中；HTTP/HTTPS 地址交给默认浏览器。失效路径会显示原因。
+- **统一按钮样式**：刷新、暂停、复制、侧栏切换等按钮去掉浏览器默认黑框，采用轻背景和柔和圆角，保留键盘焦点与浅深色适配。
+
+| 图片详情：读取时的实际内容 | 工作区状态：连接、目录与工具 |
+| --- | --- |
+| ![图片预览](docs/images/dashboard-image-preview.png) | ![工作区状态](docs/images/dashboard-workspace-status.png) |
+
+以上截图使用内置示例数据。图片预览仅保留在当前进程内存中，最多 100 张 / 32 MiB，先达到的上限生效；预览被淘汰或程序重启后需重新读取，不会把历史路径当前的内容冒充原图。
+
 ## 特性一览
 
 - **24 个本地工具**：文件读写、精确编辑、多文件补丁、搜索、命令执行与增量输出、Git 审阅、执行计划。
 - **双时代 MCP 协议（v2.0）**：同一个 EXE 同时服务 2025-06-18 legacy 客户端（`initialize` 握手，ChatGPT Tunnel 现行方式，行为零变化）与 [2026-07-28](https://modelcontextprotocol.io/specification/2026-07-28) modern 无状态客户端：`server/discover` 能力发现、每请求 `_meta` 版本协商、`resultType`、可缓存 `tools/list`（`ttlMs`/`cacheScope`）、MRTR 危险操作确认、官方 Tasks 扩展长任务句柄、OpenTelemetry trace 关联与工具图标。
-- **内嵌实时工作台**：桌面程序首个页签直接嵌入工作台页面（WebView2，随系统 Edge 附带；缺运行时自动回退浏览器），每秒同步，按对话隔离时间线，检查器按调用类型渲染（diff、命令输出、读取正文、搜索命中）。
+- **内嵌实时工作台**：桌面程序首个页签直接嵌入工作台页面（WebView2，随系统 Edge 附带；缺运行时自动回退浏览器），每秒同步，按对话隔离时间线，检查器按调用类型渲染（图片、工作区状态、diff、命令输出、读取正文、搜索命中）。
 - **一体化桌面外壳**：单行工具栏（启动/停止合一、在浏览器打开、更多菜单）+ 四个页签（实时工作台 / 操作记录 / 原始日志 / 连接配置）；操作记录与原始日志为自绘视图，按级别着色、等宽排版、尾随跟随。
 - **Codex 风格工作流**：`open_workspace` 读取 AGENTS.md 约定 → `update_plan` 展示计划 → `apply_patch` 预验证后提交多文件补丁。
 - **单文件分发**：.NET Framework 4.8 原生 EXE（WebView2 组件以资源内嵌），只监听 127.0.0.1，不开放远程访问。
@@ -79,7 +92,7 @@
 
 > 调用 get_workspace_status 确认连接
 
-应返回 `version: 2.0.1`、`tool_count: 24`、`protocol_versions`、实际程序路径和进程实例 ID。**原始日志**页签会依次出现 `initialize`、`tools/list` 与工具回执——仅"已连接"不能证明 ChatGPT 已刷新工具。
+应返回 `version: 2.0.2`、`tool_count: 24`、`protocol_versions`、实际程序路径和进程实例 ID。**原始日志**页签会依次出现 `initialize`、`tools/list` 与工具回执——仅"已连接"不能证明 ChatGPT 已刷新工具。
 
 ## 怎么用（调用方式）
 
@@ -172,6 +185,8 @@ node tests/patch.test.cjs                    # 补丁引擎
 node tests/activity.test.cjs                 # 活动记录
 node tests/dashboard.test.cjs                # 工作台数据
 node --test tests/dashboard-ui.test.cjs      # 真实浏览器 UI 回归
+node --test tests/dashboard-media.test.cjs   # 实际 MCP 图片、状态和本地打开接口
+./build.ps1 -OutputDirectory ./dist         # 退出旧程序后直接构建到 dist
 ```
 
 `tests/dashboard-ui.test.cjs` 用真实浏览器跑 `src/dashboard.html`：检查时间线、检查器内容、计划卡片与筛选，在 1920/1366/640 三种宽度确认无横向溢出，浅深色下确认每类调用有独立主色。浏览器由 `scripts/browser-launch.cjs` 按 `$env:WORKSPACE_TEST_BROWSER` → 自带 Chromium → Chrome → Edge 顺序挑选。
@@ -202,7 +217,7 @@ node --test tests/dashboard-ui.test.cjs      # 真实浏览器 UI 回归
 
 ## 安全说明
 
-- 工作台只监听 `127.0.0.1` 动态端口，不开放远程访问或执行接口；内嵌视图也只导航到该回环地址。
+- 工作台只监听 `127.0.0.1` 动态端口，不开放远程访问或任意命令执行接口。打开 Windows 位置需要同源 POST 和当前进程令牌；文件仅在资源管理器中定位，点击程序或脚本路径不会执行它。
 - 默认以当前 Windows 用户权限访问本地磁盘；工作目录**不是**操作系统沙箱，请在可信账号下使用。
 - **目前没有命令级 / 路径级护栏**：`exec_command` 会以当前用户权限执行模型下达的任意命令，没有白名单，破坏性命令（如 `rm -rf`）也不会弹确认框。文件类工具会拒绝越界路径、且工具从不自动 `commit` / `push`，但 **shell 不受限**。请把模型指向的目录范围收窄，并盯着实时工作台的时间线复核每一步。
 - `settings.json` 含 API Key，不要提交、截图或公开。

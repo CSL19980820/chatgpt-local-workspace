@@ -7,7 +7,7 @@ const upstream=sample?null:new URL(args[0]||'');
 if(!sample&&(upstream.protocol!=='http:'||upstream.hostname!=='127.0.0.1'||upstream.username||upstream.password))throw Error('Expected a loopback dashboard URL or --sample');
 const html=path.join(__dirname,'../src/dashboard.html');
 const snapshot=sample?require('./sample-snapshot.cjs'):null;
-const policy="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'";
+const policy="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'";
 let origin;
 const server=http.createServer(async(req,res)=>{
   const send=(code,type,body)=>{res.writeHead(code,{'Content-Type':type+'; charset=utf-8','Cache-Control':'no-store','Content-Security-Policy':policy,'X-Content-Type-Options':'nosniff'});res.end(body)};
@@ -17,6 +17,11 @@ const server=http.createServer(async(req,res)=>{
   if(url.origin!==origin.origin)return send(400,'text/plain','Invalid target');
   try{
     if(url.pathname==='/')return send(200,'text/html',await fs.promises.readFile(html,'utf8'));
+    if(sample&&url.pathname==='/sample-image')return send(200,'image/png',await fs.promises.readFile(path.join(__dirname,'../docs/images/dashboard-patch-review.png')));
+    if(!sample&&/^\/api\/images\/[a-f0-9]{32}$/.test(url.pathname)){
+      const response=await fetch(new URL(url.pathname,upstream),{signal:AbortSignal.timeout(5000),redirect:'error'});
+      return send(response.status,response.headers.get('content-type')||'application/octet-stream',Buffer.from(await response.arrayBuffer()));
+    }
     if(url.pathname!=='/api/snapshot')return send(404,'text/plain','Not found');
     if(sample){
       const value=snapshot(),thread=url.searchParams.get('thread');

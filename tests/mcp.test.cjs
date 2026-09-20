@@ -42,7 +42,7 @@ async function main() {
   assert.equal((await call('search_files', { path: dir, pattern: '*.cs', recursive: false })).structuredContent.result.matches.length, 0);
   assert.equal((await call('file_info', { path: fixture })).structuredContent.result.size_bytes, fs.statSync(fixture).size);
   console.log('PASS filename/content search, case sensitivity, recursion, Unicode/spaces and file metadata');
-  const status=(await call('get_workspace_status',{})).structuredContent.result;assert.equal(status.version,'2.0.1');assert.equal(status.tool_count,24);assert(status.tools.includes('write_stdin'));assert(status.activity.some(x=>x.status==='failed'));
+  const status=(await call('get_workspace_status',{})).structuredContent.result;assert.equal(status.version,'2.0.2');assert.equal(status.tool_count,24);assert(status.tools.includes('write_stdin'));assert(status.activity.some(x=>x.status==='failed'));
   const created=path.join(root,'new','nested');assert((await call('create_directory',{path:created})).structuredContent.result.created);assert.equal((await call('create_directory',{path:created})).structuredContent.result.created,false);
   const live=(await call('exec_command',{shell:'powershell',command:"Write-Output 'first-output'; Start-Sleep -Seconds 2; Write-Output 'last-output'",cwd:dir,yield_ms:1000})).structuredContent.result;
   const snap1=(await call('read_command',{session_id:live.session_id})).structuredContent.result;assert(snap1.full_output.includes('first-output'));assert.equal(snap1.output_mode,'snapshot');

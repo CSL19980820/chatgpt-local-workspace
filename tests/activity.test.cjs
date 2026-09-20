@@ -10,7 +10,7 @@ function request(method,params={}){return new Promise((resolve,reject)=>{const i
 async function call(name,args={}){const r=await request('tools/call',{name,arguments:args});assert(!r.error,JSON.stringify(r));assert.equal(r.result.structuredContent.tool,name,'concurrent calls must retain their own tool identity');return r.result.structuredContent;}
 const delay=ms=>new Promise(r=>setTimeout(r,ms));
 async function main(){
- const init=await request('initialize');assert.equal(init.result.serverInfo.version,'2.0.1');
+ const init=await request('initialize');assert.equal(init.result.serverInfo.version,'2.0.2');
  const rendered=await call('read_workspace_activity',{path:root});assert.equal(rendered.result.activity.length,0);
  const started=Date.now();let done=false;
  const long=call('exec_command',{cwd:root,cmd:'printf first; sleep 3; printf last',yield_time_ms:5000}).then(r=>{done=true;return r;});

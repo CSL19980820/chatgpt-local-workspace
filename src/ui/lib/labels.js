@@ -12,9 +12,9 @@ export const TOOL_TITLES = {
 
 export const STATES = { running: '进行中', failed: '失败', returned: '已返回' };
 export const OPERATIONS = { add: '新建', replace: '替换', edit: '精确替换', update: '修改', move: '移动', delete: '删除' };
-export const KIND_ICON = { write: 'filePen', read: 'fileText', search: 'search', command: 'terminal', list: 'folder', text: 'git', plan: 'listChecks', info: 'info', none: 'info' };
+export const KIND_ICON = { image: 'image', workspace: 'layers', write: 'filePen', read: 'fileText', search: 'search', command: 'terminal', list: 'folder', text: 'git', plan: 'listChecks', info: 'info', none: 'info' };
 // One accent per call type, so the timeline reads by what was done instead of by status.
-export const KIND_TONE = { write: 'write', read: 'read', search: 'search', command: 'command', list: 'list', text: 'git', plan: 'plan', info: 'info', none: 'info' };
+export const KIND_TONE = { image: 'read', workspace: 'info', write: 'write', read: 'read', search: 'search', command: 'command', list: 'list', text: 'git', plan: 'plan', info: 'info', none: 'info' };
 
 export const titleOf = tool => TOOL_TITLES[tool] || tool || '调用';
 export const stateOf = status => STATES[status] || status || '';

@@ -62,6 +62,16 @@ color-scheme:light dark;font:13px/1.5 var(--font-sans);background:var(--backgrou
 *::-webkit-scrollbar-thumb{background:var(--scroll-thumb);border-radius:var(--radius-sm)}
 html,body{margin:0;width:100%;height:100%;overflow:hidden}
 button,input,select,textarea{font:inherit;color:inherit}
+/* Tailwind utilities are used without Preflight: explicitly reset native button chrome. */
+button{appearance:none;border:0 solid var(--border);background:transparent;cursor:pointer}
+button:disabled{cursor:default}
+[data-slot="button"]{border:1px solid transparent;box-shadow:none}
+[data-slot="button"][data-variant="outline"]{border-color:var(--border);background:var(--card)}
+[data-slot="button"][data-variant="secondary"]{background:var(--secondary)}
+[data-slot="button"][data-variant="default"]{background:var(--primary);color:var(--primary-foreground)}
+[data-slot="button"][data-variant="destructive"]{background:var(--destructive);color:white}
+[data-slot="button"]:hover{background:var(--accent)}
+button:focus-visible{outline:2px solid var(--ring);outline-offset:3px}
 .hidden,[hidden]{display:none!important}
 .mono{font-family:var(--font-mono);overflow-wrap:anywhere}
 .muted{color:var(--muted-foreground)}
@@ -69,6 +79,31 @@ button,input,select,textarea{font:inherit;color:inherit}
 .ellipsis{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .note{font-size:11px;color:var(--muted-foreground);margin:6px 0;overflow-wrap:anywhere}
 .note.error,.danger{color:var(--destructive)}
+.path-action{min-width:0;max-width:100%}
+.path-link{display:inline-flex;align-items:baseline;gap:5px;max-width:100%;padding:0;border-radius:3px;text-align:left;font:inherit;color:var(--primary);vertical-align:baseline}
+.path-link span{min-width:0;overflow-wrap:anywhere}
+.path-link svg{flex-shrink:0;opacity:.65;align-self:center}
+.path-link:hover span{text-decoration:underline;text-underline-offset:3px}
+.path-message{display:block;font-size:11px;line-height:1.5;color:var(--muted-foreground);white-space:normal;overflow-wrap:anywhere}
+.address-line{display:block;white-space:pre-wrap}
+.context .path-link span,.card-title .path-link span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tool-list{display:flex;flex-wrap:wrap;gap:8px;padding:16px;font-family:var(--font-mono);font-size:11px}
+.workspace-locations>div{display:flex;flex-direction:column;gap:5px;padding:12px 16px;border-top:1px solid var(--border);font-size:12px}
+.workspace-locations>div:first-child{border-top:0}
+.workspace-locations strong{font-weight:500;overflow-wrap:anywhere}
+.workspace-locations .path-action{font:11px var(--font-mono)}
+.image-card{display:flex;flex-direction:column;min-height:0;border:1px solid var(--border);border-radius:12px;overflow:hidden;background:var(--card);flex:1}
+.image-toolbar{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:12px 16px;border-bottom:1px solid var(--border)}
+.image-name{display:flex;align-items:center;gap:8px;min-width:0;overflow-wrap:anywhere;font-weight:600}
+.image-name svg{color:var(--primary);flex-shrink:0}
+.image-stage{display:flex;align-items:center;justify-content:center;overflow:auto;flex:1;min-height:180px;padding:20px;background-color:var(--muted);background-image:linear-gradient(45deg,var(--border) 25%,transparent 25%),linear-gradient(-45deg,var(--border) 25%,transparent 25%),linear-gradient(45deg,transparent 75%,var(--border) 75%),linear-gradient(-45deg,transparent 75%,var(--border) 75%);background-size:16px 16px;background-position:0 0,0 8px,8px -8px,-8px 0}
+.image-stage img{display:block;max-width:100%;max-height:100%;object-fit:contain;border-radius:3px;box-shadow:0 2px 14px #0001}
+.image-stage.actual-size{display:block}
+.image-stage.actual-size img{max-width:none;max-height:none}
+.image-facts{display:flex;flex-wrap:wrap;gap:16px;padding:10px 16px;font-size:11px;color:var(--muted-foreground);border-top:1px solid var(--border)}
+.image-facts span:last-child{margin-left:auto}
+.image-path{padding:0 16px 12px;font-size:11px;font-family:var(--font-mono);overflow-wrap:anywhere}
+.image-unavailable{display:flex;flex-direction:column;align-items:center;gap:10px;text-align:center;padding:24px;color:var(--muted-foreground);background:var(--card);border-radius:8px}
 .spin{animation:spin 1s linear infinite;transform-origin:center}
 @keyframes spin{to{transform:rotate(360deg)}}
 @media (prefers-reduced-motion:reduce){.spin{animation:none}}
@@ -219,6 +254,7 @@ h2 .count{font-weight:400;font-size:10px;color:var(--muted-foreground);font-vari
    takes the leftover space, and only its scrollable region grows, so a long read, command
    output or diff fills the pane and scrolls inside instead of leaving dead space below. */
 #detail-body>*{flex-shrink:0}
+#detail-body>.image-card{flex:1 1 auto;min-height:300px}
 #detail-body>.card.fill{flex:1 1 auto;min-height:0;display:flex;flex-direction:column}
 .card.fill>.card-head,.card.fill>.status-line,.card.fill>.card-body{flex-shrink:0}
 .card.fill>.region{flex:1 1 auto;min-height:0;max-height:none;overflow:auto}

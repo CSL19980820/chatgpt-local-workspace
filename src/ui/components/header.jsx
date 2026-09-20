@@ -1,3 +1,4 @@
+import { PathLink } from './path-link.jsx';
 import { cn } from 'cn';
 import { Button } from '@/components/ui/button';
 import { Icon } from './icons.jsx';
@@ -7,7 +8,7 @@ export function Header({ title, context, chatUrl, counts, sessions, queued, conn
   return (
     <header className="workspace-head">
       <h1 id="title" title={title}>{title}</h1>
-      <span id="context" className="context" title={context}>{context}</span>
+      <span id="context" className="context" title={context}><PathLink value={context} /></span>
       {chatUrl
         ? <a id="chat" className="head-link" href={chatUrl} target="_blank" rel="noopener noreferrer" aria-label="打开对应对话"><Icon name="external" /></a>
         : null}
@@ -28,7 +29,7 @@ export function Header({ title, context, chatUrl, counts, sessions, queued, conn
       <Button id="refresh" variant="ghost" size="icon-sm" aria-label="立即同步" title="立即同步" onClick={onRefresh}>
         <Icon name="refresh" />
       </Button>
-      <Button id="pause" variant="outline" size="xs" title="暂停自动同步" onClick={onPause}>{paused ? '恢复' : '暂停'}</Button>
+      <Button id="pause" variant="secondary" size="sm" title={paused ? "恢复自动同步" : "暂停自动同步"} onClick={onPause}>{paused ? '恢复' : '暂停'}</Button>
     </header>
   );
 }

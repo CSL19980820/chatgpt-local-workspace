@@ -53,6 +53,7 @@ class MainForm:Form
         browserBtn.Text="在浏览器打开";browserBtn.Kind=UiButton.Variant.Secondary;browserBtn.Margin=new Padding(0,8,8,8);browserBtn.Enabled=false;
         moreBtn.Text="更多";moreBtn.Kind=UiButton.Variant.Secondary;moreBtn.Margin=new Padding(0,8,8,8);
         contextLabel.Dock=DockStyle.Fill;contextLabel.Text=contextText;contextLabel.Margin=new Padding(8,0,12,0);
+        contextLabel.Click+=(s,e)=>{if(!string.IsNullOrEmpty(healthUrl))OpenExternal(healthUrl+"/ui");};
         statusPill.Value=UiStatusPill.State.Stopped;statusPill.Margin=new Padding(0,11,14,11);
         toolbarGrid.Controls.Add(runToggle,0,0);toolbarGrid.Controls.Add(browserBtn,1,0);toolbarGrid.Controls.Add(moreBtn,2,0);toolbarGrid.Controls.Add(contextLabel,3,0);toolbarGrid.Controls.Add(statusPill,4,0);
         toolbar.Controls.Add(toolbarGrid);
@@ -158,7 +159,7 @@ class MainForm:Form
     }
     void OpenExternal(string url){if(url==null)return;try{Process.Start(new ProcessStartInfo(url){UseShellExecute=true});}catch(Exception ex){Log("浏览器打开失败："+ex.Message+"，可复制工作台链接手动打开。");}}
     void Save(){if(preview)return;cfg.Tunnel=tunnelInput.Text.Trim();cfg.Key=keyInput.Text.Trim();File.WriteAllText(Path.Combine(data,"settings.json"),json.Serialize(cfg));}
-    void SetContext(string text){contextText=text;contextLabel.Text=text;}
+    void SetContext(string text){contextText=text;contextLabel.Text=text;contextLabel.Cursor=string.IsNullOrEmpty(healthUrl)?Cursors.Default:Cursors.Hand;}
     void ShowConfigError()
     {
         bool badT=!Regex.IsMatch(tunnelInput.Text.Trim(),"^tunnel_[a-zA-Z0-9]+$");bool badK=keyInput.Text.Trim().Length<10;

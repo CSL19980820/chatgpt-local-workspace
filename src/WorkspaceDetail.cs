@@ -4,7 +4,7 @@ using System.Collections.Generic;
 // Shapes what a completed tool call actually did into a small, typed payload for the
 // local dashboard inspector: which files were touched, line ranges, commands, matches.
 // The one exception is a text file read, which carries a bounded copy of what came back
-// so the inspector can show the file itself; image data still never travels here. Nothing
+// so the inspector can show the file itself; images travel through a bounded cache URL. Nothing
 // lets a single call enlarge the one-second dashboard snapshot without bound.
 static class WorkspaceDetail
 {
@@ -351,7 +351,9 @@ static class WorkspaceDetail
         if(tool=="read_image")
         {
             string path=Display(Text(inner,"path"));
-            return InfoRows(new List<object>{Row("路径",path,true),Row("类型",Text(inner,"mime_type")),Row("大小",Bytes(Long(inner,"size_bytes")))},Name(path));
+            return new Dictionary<string,object>{{"kind","image"},{"session_id",null},{"path",path},{"name",Name(path)},
+                {"mime_type",Text(inner,"mime_type")},{"size_bytes",Long(inner,"size_bytes")},
+                {"preview_url",Text(inner,"preview_url")},{"summary",Name(path)}};
         }
         if(tool=="open_workspace")
         {
@@ -372,6 +374,23 @@ static class WorkspaceDetail
             var rows=new List<object>{Row("对话",Text(inner,"title")),Row("工作目录",Display(Text(inner,"path")),true),Row("线程",Text(inner,"thread_id"),true)};
             string chat=Text(inner,"chat_id");rows.Add(Row("ChatGPT 对话",chat.Length>0?chat:"未绑定（本地线程）",chat.Length>0));
             return InfoRows(rows,Clip(Text(inner,"title"),60));
+        }
+        if(tool=="get_workspace_status")
+        {
+            var rows=new List<object>{Row("版本",Text(inner,"version")),Row("实例",Text(inner,"instance_id"),true),Row("程序",Display(Text(inner,"executable")),true)};
+            rows.Add(Row("工具数",Text(inner,"tool_count")));
+            rows.Add(Row("运行中命令",Text(inner,"running_commands")));
+            rows.Add(Row("面板地址",Display(Text(inner,"dashboard_url")),true));
+            rows.Add(Row("默认 Shell",Text(inner,"default_shell")));
+            var protocols=new List<string>();foreach(object item in Rows(inner,"protocol_versions"))protocols.Add(Convert.ToString(item));
+            rows.Add(Row("协议版本",String.Join("\n",protocols.ToArray())));
+            rows.Add(Row("可见范围",Text(inner,"scope")));
+            var detail=InfoRows(rows,"工作区状态 · v"+Text(inner,"version"));
+            detail["kind"]="workspace";
+            detail["tools"]=Rows(inner,"tools");
+            var workspaces=new List<object>();foreach(object item in Rows(inner,"conversations"))workspaces.Add(new{title=Text(item,"title"),path=Display(Text(item,"path"))});
+            detail["workspaces"]=workspaces;
+            return detail;
         }
         return null;
     }
@@ -394,6 +413,7 @@ static class WorkspaceDetail
         else if(tool=="update_plan")detail=Plan(inner);
         else detail=Info(tool,inner);
         if(detail==null)detail=new Dictionary<string,object>{{"kind","none"},{"session_id",null}};
+        if(tool=="read_image"&&Text(detail,"path").Length==0){string requested=Display(Text(args,"path"));detail["path"]=requested;detail["name"]=Name(requested);}
         string target=Text(inner,"path");if(target.Length==0)target=Text(inner,"requested_path");if(target.Length==0)target=Text(inner,"cwd");
         if(target.Length==0)target=Text(detail,"path");
         detail["tool"]=tool;detail["target"]=Display(target);
