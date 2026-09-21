@@ -376,6 +376,7 @@ static class WorkspaceDetail
             string chat=Text(inner,"chat_id");rows.Add(Row("ChatGPT 对话",chat.Length>0?chat:"未绑定（本地线程）",chat.Length>0));
             return InfoRows(rows,Clip(Text(inner,"title"),60));
         }
+        if(tool=="check_task_completion")return InfoRows(new List<object>{Row("工作目录",Display(Text(inner,"path")),true),Row("完成检查",Flag(inner,"can_finish")?"登记证据与执行状态检查通过":"尚未满足交付条件"),Row("未完成步骤",String.Join("\n",Array.ConvertAll(Rows(inner,"unfinished_steps"),Convert.ToString))),Row("缺少验收证据",String.Join("\n",Array.ConvertAll(Rows(inner,"missing_evidence"),Convert.ToString))),Row("阻塞或暂停原因",Text(inner,"reason")),Row("最近执行问题",Text(inner,"last_issue")),Row("下一步",Text(inner,"next_action")),Row("证据范围",Text(inner,"evidence_scope"))},Flag(inner,"can_finish")?"任务完成检查通过":"任务尚未完成");
         if(tool=="get_workspace_status")
         {
             var rows=new List<object>{Row("版本",Text(inner,"version")),Row("实例",Text(inner,"instance_id"),true),Row("程序",Display(Text(inner,"executable")),true)};

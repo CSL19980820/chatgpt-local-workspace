@@ -4,7 +4,7 @@
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-green" alt="MIT License"></a>
   <img src="https://img.shields.io/badge/platform-Windows%2010%2F11%20x64-blue" alt="Windows 10/11 x64">
   <img src="https://img.shields.io/badge/.NET%20Framework-4.8-orange" alt=".NET Framework 4.8">
-  <img src="https://img.shields.io/badge/version-2.1.0-brightgreen" alt="v2.1.0">
+  <img src="https://img.shields.io/badge/version-2.2.0-brightgreen" alt="v2.2.0">
 </p>
 
 <p align="center">
@@ -23,23 +23,38 @@ Let ChatGPT work directly on your machine through the **official OpenAI tunnel**
 
 ![Patch review view](docs/images/dashboard-patch-review.png)
 
+## New in 2.2.0: unfinished-task checks and continuation prompts
+
+The dashboard now keeps unfinished work, missing evidence, execution issues and the next action visible even when the plan is collapsed. **Copy continuation prompt** prepares text to send back to the original conversation.
+
+- `check_task_completion` checks pending steps, missing declared evidence, active commands and execution failures not yet acknowledged by a later plan update.
+- `update_plan` adds per-step `evidence` and `task_state`, `reason`, `next_action`. Blocked or explicitly user-paused tasks require a concrete reason and next action. Progress-only updates preserve these states.
+- Tool receipts include scoped task reminders. Removing unfinished steps requires a scope-change explanation; successful tool calls do not imply task completion.
+- After two minutes without observed operations, unfinished tasks show an unconfirmed idle state. A plan step marked in progress alone no longer produces a running spinner.
+
+![Task check and continuation prompt](docs/images/dashboard-task-completion.png)
+
+The screenshot uses isolated test data. **Checks use model-declared evidence and local execution state; they do not independently verify the work, prevent a ChatGPT final response or start another turn.** Copying does not send a message or grant new authority. State remains process-local and must be registered again after restart. See [2.2.0 release notes](docs/RELEASE-2.2.0.md).
+
+Refresh tools after upgrading and verify `version: 2.2.0` / `tool_count: 26`. Track the full task, add actual evidence after verification, then call `check_task_completion` before final delivery. If `can_finish` is false, continue authorized work or record the concrete blocker.
+
 ## New in 2.1.0: session grouping, attachments and diagnostics
 
 - **Automatic conversation grouping:** calls carrying official `openai/session` metadata share a local timeline. Clients without that metadata retain explicit registration and `thread_id` support.
 - **Chat attachment import:** the new `import_file` tool accepts the official file input contract and creates a new local file, up to 32 MiB, with a size, MIME type and SHA256 receipt. Existing destinations are never overwritten.
-- **Concise receipts:** `content` is a short summary; full data is in `structuredContent.result`. Each of the 25 tools declares its output shape. Image reads still return native image content.
+- **Concise receipts:** `content` is a short summary; full data is in `structuredContent.result`. Each of the 26 tools declares its output shape. Image reads still return native image content.
 - **Connection diagnostics:** the dashboard header and desktop More menu check configuration, tunnel liveness/readiness, handshake, tool discovery, successful calls and session metadata. Unobserved steps remain pending; checks do not restart connections.
 
 ![Connection diagnostics](docs/images/dashboard-diagnostics.png)
 
 The screenshot comes from an isolated local MCP test process, so tunnel checks are unavailable. Synthetic host metadata, real public HTTPS downloads and browser interactions were tested. Session forwarding and attachment selection in an actual ChatGPT account remain host-dependent. Based on the official [plugin reference](https://developers.openai.com/plugins/reference), [MCP server guide](https://developers.openai.com/plugins/build/mcp-server) and [Secure MCP Tunnels guide](https://developers.openai.com/api/docs/guides/secure-mcp-tunnels).
 
-Exit the old application before launching the new binary, refresh ChatGPT tools, and verify `version: 2.1.0` / `tool_count: 25` in a new conversation. Custom clients parsing JSON from `content[0].text` must switch to `structuredContent.result`. See [release notes](docs/RELEASE-2.1.0.md).
+Exit the old application before launching the new binary, refresh ChatGPT tools, and verify `version: 2.2.0` / `tool_count: 26` in a new conversation. Custom clients parsing JSON from `content[0].text` must switch to `structuredContent.result`. See [release notes](docs/RELEASE-2.1.0.md).
 
 ## Retained from 2.0.2
 
 - **Actual image previews:** inspect the exact PNG, JPEG, GIF or WebP bytes returned by `read_image`, switch between fit and original size, and see dimensions, format, size and location. Later file edits do not change a captured preview.
-- **Useful workspace status:** version, executable, dashboard URL, shell, running commands, registered workspace paths and all 25 tools appear in the inspector.
+- **Useful workspace status:** version, executable, dashboard URL, shell, running commands, registered workspace paths and all 26 tools appear in the inspector.
 - **Open locations in Windows:** click workspace paths, file details, directory entries, search results, patch paths and command working directories. Directories open in Explorer; files are selected in Explorer; HTTP/HTTPS links open in the default browser. Clicking an executable or script does not run it.
 - **Consistent controls:** soft button surfaces replace native black outlines, with visible keyboard focus and light/dark support.
 
@@ -51,7 +66,7 @@ Screenshots use sample data. Image previews live only in the current process, bo
 
 ## Features
 
-- **25 local tools**: file read/write, precise edits, multi-file patches, search, command execution with incremental output, Git review, execution plans.
+- **26 local tools**: file read/write, precise edits, multi-file patches, search, command execution with incremental output, Git review, execution plans.
 - **Dual-era MCP protocol (v2.0)**: one EXE serves both legacy 2025-06-18 clients (`initialize` handshake — what the ChatGPT Tunnel uses today, compatible handshake and calls) and modern [2026-07-28](https://modelcontextprotocol.io/specification/2026-07-28) stateless clients: `server/discover`, per-request `_meta` version negotiation, `resultType`, cacheable `tools/list` (`ttlMs`/`cacheScope`), MRTR confirmations for destructive operations, the official Tasks extension for long-running commands, OpenTelemetry trace correlation and tool icons.
 - **Standalone live dashboard**: a locally compiled React + shadcn/ui single-page app, synced every second, timelines isolated per conversation, inspector rendered per call type (diffs, command output, file content, search hits). The desktop app embeds it in its first tab (WebView2; falls back to the browser when the runtime is missing).
 - **One-piece desktop shell**: single-row toolbar (combined start/stop, open in browser, more menu) plus four tabs (workbench / operation log / raw log / connection settings); the log views are owner-drawn with level colors, monospace type and tail-follow.
@@ -92,7 +107,7 @@ Launch `LocalWorkspace.exe`, paste the Tunnel ID and API Key, click **Start**. S
 
 ### 4. Refresh the plugin in ChatGPT
 
-Open ChatGPT web → **Settings → Connectors → Local Workspace**, scroll to the bottom and click **Refresh** (this is the developer connection page; if the app detail page only shows "Reconnect", use the settings page instead). The action list should then contain all 25 tools.
+Open ChatGPT web → **Settings → Connectors → Local Workspace**, scroll to the bottom and click **Refresh** (this is the developer connection page; if the app detail page only shows "Reconnect", use the settings page instead). The action list should then contain all 26 tools.
 
 ### 5. Verify
 
@@ -100,7 +115,7 @@ In a new chat, say:
 
 > Call get_workspace_status to confirm the connection
 
-It should return `version: 2.1.0`, `tool_count: 25`, `protocol_versions`, the actual executable path and this process's instance ID. The desktop log shows `initialize`, `tools/list` and tool receipts in order — "tunnel connected" alone does not prove ChatGPT refreshed the tools.
+It should return `version: 2.2.0`, `tool_count: 26`, `protocol_versions`, the actual executable path and this process's instance ID. The desktop log shows `initialize`, `tools/list` and tool receipts in order — "tunnel connected" alone does not prove ChatGPT refreshed the tools.
 
 ## Usage (how tools get called)
 
@@ -140,7 +155,7 @@ The tool returns a local thread ID and a direct dashboard link; subsequent calls
 
 When the host provides file input, the model uses `import_file`. The destination directory must exist and the destination file must be new. HTTPS download failures do not leave a partial destination. Signed URLs are excluded from local logs and receipts. Once saved, other tools can read or process the file. Host attachment support is required.
 
-## The 25 tools
+## The 26 tools
 
 > Full input parameters, types and return fields are in [docs/TOOLS.md](docs/TOOLS.md). The table below only groups them by purpose.
 
@@ -150,6 +165,7 @@ When the host provides file input, the model uses `import_file`. The destination
 | Standalone activity queries (textual snapshot in chat) | `read_workspace_activity` |
 | Workspace conventions, plans & multi-file patches | `open_workspace`, `update_plan`, `apply_patch` |
 | Connection, version & activity diagnostics | `get_workspace_status` |
+| Task completion check before delivery | `check_task_completion` |
 | Directories, file metadata & search | `list_directory`, `file_info`, `search_files`, `search_text` |
 | Read text and images | `read_file`, `read_image` |
 | Save chat attachments to new local files | `import_file` |
@@ -213,7 +229,7 @@ Verification records: [VERIFICATION.md](VERIFICATION.md). Upgrade notes: [UPGRAD
 
 ## Troubleshooting
 
-**ChatGPT claims it can only read?** Have it call `get_workspace_status` and check version, `tool_count: 25` and connection; then refresh metadata in settings and open a new chat. Don't blame OS permissions for stale chat caches, old plugin versions or a service that isn't running.
+**ChatGPT claims it can only read?** Have it call `get_workspace_status` and check version, `tool_count: 26` and connection; then refresh metadata in settings and open a new chat. Don't blame OS permissions for stale chat caches, old plugin versions or a service that isn't running.
 
 **"Tunnel connected" but tools don't respond?** Tunnel connectivity ≠ ChatGPT refreshed the tools. The desktop log must show `initialize` and `tools/list`.
 
@@ -235,7 +251,7 @@ The server is a **dual-era** implementation: it picks its behaviour from how the
 
 | Era | Trigger | What you get |
 | --- | --- | --- |
-| legacy (2025-06-18) | `initialize` handshake (what the ChatGPT Tunnel uses today) | Compatible handshake: 25 tools, progress notifications, structured output |
+| legacy (2025-06-18) | `initialize` handshake (what the ChatGPT Tunnel uses today) | Compatible handshake: 26 tools, progress notifications, structured output |
 | modern ([2026-07-28](https://modelcontextprotocol.io/specification/2026-07-28)) | request `_meta` carries `io.modelcontextprotocol/protocolVersion` | Stateless per-request negotiation, `server/discover`, `resultType`, cacheable `tools/list` (`ttlMs`/`cacheScope: private`), `serverInfo` on every result |
 
 Modern-era features activate progressively from the capabilities the client declares:

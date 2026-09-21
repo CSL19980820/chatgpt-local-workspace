@@ -1,0 +1,63 @@
+const test=require('node:test'),assert=require('node:assert/strict');
+const fs=require('node:fs'),os=require('node:os'),path=require('node:path'),{spawn}=require('node:child_process');
+const {launchDashboardBrowser}=require('../scripts/browser-launch.cjs');
+test('completion checks, failure receipts, explicit blockers and resumable UI', {timeout:160000}, async t=>{
+  const root=fs.mkdtempSync(path.join(os.tmpdir(),'workspace-task-'));
+  const child=spawn(process.env.WORKSPACE_TEST_EXE||path.join(__dirname,'../dist-next/LocalWorkspace.exe'),['--mcp'],{windowsHide:true,stdio:['pipe','pipe','pipe']});
+  const exited=new Promise(resolve=>child.once('exit',resolve));let seq=0,buffer='',base='',browser;const pending=new Map();
+  child.stderr.on('data',d=>{const m=String(d).match(/\[Dashboard\] (http:\/\/127\.0\.0\.1:\d+\/)/);if(m)base=m[1];});
+  child.stdout.on('data',d=>{buffer+=d;let i;while((i=buffer.indexOf('\n'))>=0){const r=JSON.parse(buffer.slice(0,i));buffer=buffer.slice(i+1);const p=pending.get(r.id);if(p){clearTimeout(p.timer);pending.delete(r.id);p.resolve(r);}}});
+  const rpc=(method,params={})=>new Promise((resolve,reject)=>{const id=++seq;pending.set(id,{resolve,timer:setTimeout(()=>reject(Error('MCP timeout')),20000)});child.stdin.write(JSON.stringify({jsonrpc:'2.0',id,method,params})+'\n');});
+  const validators=new Map(),ajv=new(require('ajv'))({strict:false});
+  const call=async(name,args={},session='task-test-A')=>{const r=await rpc('tools/call',{name,arguments:args,_meta:{'openai/session':session}});assert(!r.error,JSON.stringify(r));const v=validators.get(name);if(v)assert(v(r.result.structuredContent),JSON.stringify(v.errors));return r.result;};
+  const check=async()=> (await call('check_task_completion',{path:root})).structuredContent.result;
+  const plan=[{step:'实现页面修复',status:'completed',evidence:'已比对目标文件修改'},{step:'验证并交付',status:'pending'}];
+  const update=(steps=plan,extra={})=>call('update_plan',{path:root,plan:steps,...extra});
+  const delay=ms=>new Promise(resolve=>setTimeout(resolve,ms));
+  try{
+    await rpc('initialize');for(const tool of (await rpc('tools/list')).result.tools)validators.set(tool.name,ajv.compile(tool.outputSchema));
+    assert.equal((await check()).state,'untracked');
+    const registered=await update();assert.equal(registered.isError,false);assert.equal(registered.structuredContent.task.unfinished_steps,1);
+    const read=await call('file_info',{path:root});assert(read.content[0].text.includes('1 unfinished'));assert.equal(read.structuredContent.task.can_finish,false);
+    assert.deepEqual((await check()).unfinished_steps,['验证并交付']);
+    assert((await update([plan[0]])).isError,'cannot silently drop outstanding scope');
+    const complete=plan.map(p=>({...p,status:'completed'}));await update(complete);assert.equal((await check()).state,'verification_required');
+    complete[1].evidence='实际测试通过，已核验交付结果';await update(complete);assert.equal((await check()).can_finish,true);
+    await update(complete.map(({step,status})=>({step,status})));assert.equal((await check()).can_finish,true,'omitted evidence preserves existing receipt');
+    await update(complete.map(p=>({...p,evidence:''})));assert.equal((await check()).can_finish,false,'explicit empty evidence revokes old receipt');await update(complete);
+    const running=(await call('exec_command',{cwd:root,shell:'powershell',cmd:'Start-Sleep -Seconds 30',yield_time_ms:0})).structuredContent.result;
+    assert.equal((await check()).state,'running');assert.equal((await check()).can_finish,false);
+    await call('stop_command',{session_id:running.session_id});assert.equal((await check()).state,'needs_attention');assert.equal((await check()).last_issue,'COMMAND_STOPPED');
+    await update(complete);assert.equal((await check()).can_finish,true);
+    await call('exec_command',{cwd:root,shell:'powershell',cmd:'exit 7',yield_time_ms:3000});assert.equal((await check()).can_finish,false);
+    await update(complete);assert.equal((await check()).can_finish,true);
+    const timed=(await call('exec_command',{cwd:root,shell:'powershell',cmd:'Start-Sleep -Seconds 30',yield_time_ms:0,timeout_seconds:1})).structuredContent.result;
+    await delay(1500);assert.equal((await check()).last_issue,'COMMAND_TIMEOUT');assert.equal((await check()).can_finish,false);
+    await call('read_command',{session_id:timed.session_id});assert.match((await check()).last_issue,/COMMAND_TIMEOUT/);await update(plan);
+    assert((await update(plan,{task_state:'blocked'})).isError);assert.equal((await check()).state,'active');
+    await update(plan,{task_state:'blocked',reason:'缺少目标环境的验收入口',next_action:'取得入口后完成验证并交付'});
+    assert.equal((await check()).state,'blocked');assert.equal((await check()).can_finish,false);
+    await update(plan,{explanation:'补充进度'});assert.equal((await check()).state,'blocked','status-only update must preserve explicit block');
+    const foreign=await call('get_workspace_status',{},'task-test-B');assert.equal(foreign.structuredContent.task,null);
+    assert.equal((await call('check_task_completion',{path:root},'task-test-B')).structuredContent.result.state,'untracked');
+    await update(plan,{task_state:'paused',reason:'用户明确要求暂停',next_action:'等用户要求继续'});assert.equal((await check()).state,'paused');
+    await update(plan,{task_state:'active'});assert.equal((await check()).reason,'');
+    if(process.env.WORKSPACE_TASK_IDLE_SMOKE==='1'){
+      await delay(121000);assert.equal((await check()).state,'idle_unconfirmed');
+      const snapshot=await(await fetch(new URL('/api/snapshot',base))).json();assert.equal(snapshot.plans[0].task.state,'idle_unconfirmed');
+      t.diagnostic('Actual 2-minute idle interval observed without inferring model termination.');
+    }
+    await update(plan,{task_state:'blocked',reason:'缺少目标环境的验收入口',next_action:'取得入口后完成验证并交付'});
+    const launched=await launchDashboardBrowser();browser=launched.browser;
+    const context=await browser.newContext({viewport:{width:1400,height:900},permissions:['clipboard-read','clipboard-write']});const page=await context.newPage();const errors=[];page.on('pageerror',e=>errors.push(String(e)));
+    await page.goto(base);await page.locator('.task-receipt.blocked').waitFor();assert.equal(await page.locator('#plan-body').isVisible(),false);
+    assert.match(await page.locator('.task-receipt').innerText(),/缺少目标环境的验收入口/);
+    await page.getByRole('button',{name:'复制续做提示',exact:true}).click();
+    const copied=await page.evaluate(()=>navigator.clipboard.readText());assert(copied.includes('验证并交付'));assert(copied.includes('不新增部署'));assert(copied.includes('先确认记录的暂停或阻塞条件'));
+    await page.click('#plan-toggle');assert.equal(await page.locator('#plan-body .animate-spin').count(),0);
+    if(process.env.WORKSPACE_CAPTURE_TASKS==='1')await page.locator('#plan-card').screenshot({path:path.join(__dirname,'../docs/images/dashboard-task-completion.png')});
+    await update(complete,{task_state:'active'});await page.locator('.task-receipt.ready').waitFor();assert.equal(await page.locator('.task-receipt button').count(),0);
+    await page.setViewportSize({width:640,height:720});assert(await page.locator('#plan-card').evaluate(e=>e.scrollWidth<=e.clientWidth+1));
+    await page.emulateMedia({colorScheme:'dark'});await delay(250);assert.deepEqual(errors,[]);
+  }finally{if(browser)await browser.close();for(const p of pending.values())clearTimeout(p.timer);child.stdin.end();await exited;fs.rmSync(root,{recursive:true,force:true});}
+});

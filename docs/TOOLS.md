@@ -1,6 +1,6 @@
-# 工具参数手册（25 个）
+# 工具参数手册（26 个）
 
-本页是 25 个本地工具的输入参数参考，与 `src/WorkspaceServer.cs` 中 `BuildTools()` 注册的 schema 一致。工具由模型按需自动调用，你用自然语言下达任务即可；本页供你核对参数、写自动化或排查调用失败时使用。
+本页是 26 个本地工具的输入参数参考，与 `src/WorkspaceServer.cs` 中 `BuildTools()` 注册的 schema 一致。工具由模型按需自动调用，你用自然语言下达任务即可；本页供你核对参数、写自动化或排查调用失败时使用。
 
 ## 通用约定
 
@@ -48,8 +48,27 @@
 | 参数 | 类型 | 必填 | 说明 |
 | --- | --- | --- | --- |
 | `path` | string | 是 | 工作区绝对目录 |
-| `plan` | array | 是 | 1..20 个步骤，每项 `{step: string≤240, status: pending\|in_progress\|completed}` |
-| `explanation` | string | 否 | 本次计划更新的简要原因 |
+| `plan` | array | 是 | 1..20 个步骤，每项 `{step: string≤240, status: pending\|in_progress\|completed, evidence?: string≤1000}` |
+| `explanation` | string | 条件 | 最多 2000 字；移除或重命名未完成步骤时必须说明范围变化 |
+| `task_state` | string | 否 | `active` / `blocked` / `paused`；新计划默认 active，已有阻塞/暂停在省略时保留 |
+| `reason` | string | 条件 | blocked / paused 必填，最多 1000 字；具体阻塞或用户明确暂停要求 |
+| `next_action` | string | 条件 | blocked / paused 必填，最多 1000 字；下一步或解除阻塞的条件 |
+
+`evidence` 应记录实际验证结果或回执，不得填写未执行的验证。旧客户端仍可省略，但已完成步骤缺少证据时完成检查不通过。恢复时显式设置 `task_state: active`，并根据实际结果更新计划；该操作不会取消用户的授权边界。
+
+### `check_task_completion` （只读）
+
+交付前调用，核对当前对话下指定计划的完成条件。
+
+| 参数 | 类型 | 必填 | 说明 |
+| --- | --- | --- | --- |
+| `path` | string | 是 | `update_plan` 使用的同一个绝对工作目录 |
+
+返回 `can_finish`、`state`、`unfinished_steps`、`missing_evidence`、`running`、`reason`、`next_action`、`last_issue`、`last_issue_at` 和 `resume_prompt`。没有该计划时返回 `state: untracked`、`can_finish: false` 和建立计划的提示。检查调用自身成功不等于 `can_finish: true`，应读取该字段。
+
+状态包括 active、running、needs_attention、verification_required、idle_unconfirmed、blocked、paused 和 ready。所有步骤已登记完成且有证据、没有运行中的命令、没有晚于最后计划更新的失败记录、任务处于 active 时才返回 ready。两分钟无操作仅表示待确认；暂停/阻塞状态必须被尊重。
+
+检查只核对登记字段及当前进程的有界执行记录，无法独立验证证据、需求完整性或宿主是否结束回复。`resume_prompt` 供复制回原对话，不自动发送或新增授权。
 
 ### `apply_patch` （写入）
 应用 Codex 风格多文件补丁：`*** Begin Patch` / `Add|Update|Delete File` / 可选 `Move to` / `@@` 上下文 / `*** End of File` / `*** End Patch`。写入前校验全部改动；拒绝歧义上下文、目标覆盖与路径越界。
@@ -109,6 +128,8 @@
 | `limit` | integer | 否 | 最多 1..200 条，默认 50 |
 
 ## 读取与写入文件
+
+任务存在时，工具 `structuredContent.task` 会附带同一对话的完成提示、未完成项数量和下一步；无已登记计划时该字段为 null。它不会更改原有 `structuredContent.result` 业务字段。
 
 ### `read_file` （只读）
 按行读取文本文件，带行号与显式续读标记（`next_line`）。支持 UTF-8 与 BOM。

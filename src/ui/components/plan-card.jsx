@@ -1,5 +1,6 @@
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Icon, SpinIcon } from './icons.jsx';
+import { TaskReceipt } from './task-receipt.jsx';
 
 // The plan card sits above the timeline: collapsed it shows progress and the current step,
 // expanded it shows the full checklist of every visible plan.
@@ -9,29 +10,31 @@ export function PlanCard({ plans, grouped, threadName, open, onToggle }) {
   if (!steps.length) return null;
   const done = steps.filter(step => step.status === 'completed').length;
   const current = steps.find(step => step.status === 'in_progress');
+  const running = (plans || []).some(plan => plan.task?.running);
 
   const stepIcon = status => (
     status === 'completed' ? <Icon name="check" />
-      : status === 'in_progress' ? <SpinIcon />
+      : status === 'in_progress' ? <Icon name="chevronRight" />
         : <Icon name="circle" />
   );
 
   return (
-    <Collapsible id="plan-card" className={'plan-card' + (done === steps.length ? ' done' : '')} open={open} onOpenChange={onToggle}>
+    <Collapsible id="plan-card" className={'plan-card' + ((plans || []).every(plan => plan.task?.can_finish) ? ' done' : '')} open={open} onOpenChange={onToggle}>
       <CollapsibleTrigger id="plan-toggle" className="plan-head" title="展开或收起执行计划">
         <span className="plan-mark"><Icon name="listChecks" /></span>
         <span className="plan-name">执行计划</span>
         <span id="plan-count" className="plan-count">{done} / {steps.length}</span>
         <span className="chevron"><Icon name="chevron" /></span>
       </CollapsibleTrigger>
+      <div className="task-receipts">{(plans || []).map(plan => <TaskReceipt key={plan.thread_id + plan.path} task={plan.task} title={grouped ? threadName(plan.thread_id) : ''} />)}</div>
       <CollapsibleContent id="plan-body" className="plan-body">
         <div id="plan-bar" className="plan-bar">
           {steps.map((step, index) => <i key={index} className={step.status} />)}
         </div>
         <div className="plan-current">
-          <span className="mark">{current ? <SpinIcon /> : <Icon name={done === steps.length ? 'check' : 'chevronRight'} />}</span>
+          <span className="mark">{running ? <SpinIcon /> : <Icon name={done === steps.length ? 'check' : 'chevronRight'} />}</span>
           <span id="plan-current-text" className="ellipsis" title={current ? current.step : null}>
-            {current ? current.step : (done === steps.length ? '计划已全部完成' : '等待下一步')}
+            {current ? current.step : (done === steps.length ? '步骤已登记完成，请核对验收证据' : '等待下一步')}
           </span>
         </div>
         <div id="plan-steps" className="plan-steps">

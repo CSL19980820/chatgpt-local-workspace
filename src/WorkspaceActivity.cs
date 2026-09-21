@@ -25,6 +25,11 @@ static class WorkspaceActivity
         lock(Gate)return Entries.Where(x=>Within(x.Target,path)&&(thread.Length==0||x.ThreadId==thread)).Select(x=>new{thread_id=x.ThreadId,id=x.Id,tool=x.Tool,target=x.Target,status=x.Status,started_at=x.Started.ToString("o"),elapsed_ms=x.Status=="running"?(long)(DateTime.UtcNow-x.Started).TotalMilliseconds:x.Elapsed,error_code=x.Error,trace=x.Trace,preview=receipts?x.Preview:null,detail=x.Detail,session_id=Session(x.Detail)}).ToArray();
     }
     static string Session(Dictionary<string,object> detail){object value;if(detail!=null&&detail.TryGetValue("session_id",out value))return value as string;return null;}
+    public static Dictionary<string,object> TaskObservation(string path,string thread)
+    {
+        lock(Gate){var rows=Entries.Where(e=>e.ThreadId==thread&&Within(e.Target,path)&&!new[]{"update_plan","check_task_completion","get_workspace_status","read_workspace_activity","open_workspace"}.Contains(e.Tool)).ToArray();
+            var failed=rows.LastOrDefault(e=>e.Status=="failed");return new Dictionary<string,object>{{"running",rows.Any(e=>e.Status=="running")},{"last_at",rows.Length==0?DateTime.MinValue:rows.Max(e=>e.Started.AddMilliseconds(e.Elapsed))},{"failure",failed==null?"":failed.Tool+": "+failed.Error},{"failure_at",failed==null?DateTime.MinValue:failed.Started.AddMilliseconds(failed.Elapsed)}};}
+    }
     public static void Seen(string id,string path,string bridge,string mode)
     {
         if(string.IsNullOrEmpty(id))return;

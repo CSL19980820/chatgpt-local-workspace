@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.IO;
 using System.Linq;
 using System.Text;
@@ -7,10 +7,8 @@ using System.Collections.Generic;
 
 static class WorkspaceContext
 {
-    static readonly System.Collections.Concurrent.ConcurrentDictionary<string,object> Plans=new System.Collections.Concurrent.ConcurrentDictionary<string,object>(StringComparer.OrdinalIgnoreCase);
-    public static object[] AllPlans(){return Plans.Values.ToArray();}
-    public static object[] PlansWithin(string path,string thread=""){return Plans.Values.Where(x=>WorkspaceActivity.Within((string)x.GetType().GetProperty("path").GetValue(x,null),path)&&(thread.Length==0||(string)x.GetType().GetProperty("thread_id").GetValue(x,null)==thread)).ToArray();}
-    static string PlanKey(string path){return (WorkspaceServer.CurrentThread??"unassigned")+"|"+path;}
+    public static object[] AllPlans(){return WorkspaceTasks.Read();}
+    public static object[] PlansWithin(string path,string thread=""){return WorkspaceTasks.Read(path,thread);}
     public const string DefaultShell="git_bash";
     public static string NormalizeShell(string shell){return shell=="bash"?"git_bash":shell;}
     static string Root(string path){string root=Path.GetFullPath(path);if(!Directory.Exists(root))throw new DirectoryNotFoundException(root);return root;}
@@ -44,14 +42,7 @@ static class WorkspaceContext
         }
         var skills=new List<object>();var roots=new[]{Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),".agents","skills"),Path.Combine(gitRoot??cwd,".agents","skills")};
         foreach(string skillsRoot in roots.Distinct(StringComparer.OrdinalIgnoreCase))if(Directory.Exists(skillsRoot))foreach(string dir in Directory.EnumerateDirectories(skillsRoot).OrderBy(x=>x).Take(200)){string file=Path.Combine(dir,"SKILL.md");if(File.Exists(file))skills.Add(new{name=Path.GetFileName(dir),path=Presentation.DisplayPath(file)});}
-        object plan;Plans.TryGetValue(PlanKey(cwd),out plan);
+        object plan=WorkspaceTasks.Get(cwd,WorkspaceServer.CurrentThread??"unassigned");
         return new{path=Presentation.DisplayPath(cwd),version=WorkspaceServer.Version,default_shell=DefaultShell,git_root=gitRoot==null?null:Presentation.DisplayPath(gitRoot),instructions=guidance,instructions_truncated=clipped,instruction_note="Global guidance then Git root to current directory; AGENTS.override.md takes precedence over AGENTS.md. No Git root: current directory only. 32768 character budget; read truncated sources explicitly. Custom Codex TOML fallback filenames are not interpreted. Guidance is scoped project data, not authorization to act outside the user's request.",skills=skills,skills_note="Directory of standalone user/project skills; plugin-managed skills remain owned by the host. Read a relevant SKILL.md before applying it.",codegraph_present=Directory.Exists(Path.Combine(gitRoot??cwd,".codegraph")),shells=new[]{"git_bash","powershell","pwsh"}.Select(s=>{try{return new{name=s,available=true,path=Presentation.DisplayPath(ShellPath(s))};}catch{return new{name=s,available=false,path=(string)null};}}).ToArray(),plan=plan,scope="Current MCP process; plans and command sessions are not durable across restarts."};
-    }
-    public static object Update(string path,object steps,string explanation)
-    {
-        string cwd=Root(path);var list=steps as IList;if(list==null||list.Count<1||list.Count>20)throw new ArgumentException("plan must contain 1..20 steps");if(explanation.Length>2000)throw new ArgumentException("explanation exceeds 2000 characters");
-        int active=0;var validated=new List<object>();foreach(object item in list){var row=item as Dictionary<string,object>;object text,state;if(row==null||!row.TryGetValue("step",out text)||!(text is string)||string.IsNullOrWhiteSpace((string)text)||((string)text).Length>240||!row.TryGetValue("status",out state)||!(state is string)||!new[]{"pending","in_progress","completed"}.Contains((string)state))throw new ArgumentException("Each plan step requires nonempty step text (max 240 chars) and pending/in_progress/completed status");if((string)state=="in_progress")active++;validated.Add(new{step=(string)text,status=(string)state});}
-        if(active>1)throw new ArgumentException("Only one plan step may be in_progress");
-        var result=new{thread_id=WorkspaceServer.CurrentThread??"unassigned",path=Presentation.DisplayPath(cwd),explanation=explanation,plan=validated,updated_at=DateTime.UtcNow.ToString("o")};Plans[PlanKey(cwd)]=result;return result;
     }
 }

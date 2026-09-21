@@ -7,6 +7,7 @@ static class WorkspaceContracts
 {
     static object Get(object value,string key){if(value==null)return null;var map=value as IDictionary<string,object>;object found;if(map!=null)return map.TryGetValue(key,out found)?found:null;var field=value.GetType().GetProperty(key);return field==null?null:field.GetValue(value,null);}
     static string Text(object value,string key){return Convert.ToString(Get(value,key))??"";}
+    public static string FailureCode(object receipt){object result=Get(Get(receipt,"structuredContent"),"result");if(Convert.ToString(Get(result,"timed_out"))=="True")return "COMMAND_TIMEOUT";string code=Text(result,"error_code");return code.Length>0?code:"COMMAND_FAILED";}
     public static string Summary(string tool,object value,bool error)
     {
         if(error){string message=Text(value,"message");if(message.Length==0)message=Text(value,"error");if(message.Length==0)message="exit_code="+Text(value,"exit_code")+", timed_out="+Text(value,"timed_out");return tool+" failed: "+Clip(message);}
@@ -15,6 +16,7 @@ static class WorkspaceContracts
         if(tool=="read_file")return "Read "+Text(value,"returned_count")+" lines from "+path+". next_line="+Text(value,"next_line")+". Content is in structuredContent.result.lines.";
         if(tool=="get_workspace_status")return "Local Workspace "+Text(value,"version")+": "+Text(value,"tool_count")+" tools; "+Text(value,"running_commands")+" running commands.";
         if(tool=="import_file")return "Saved attachment to "+path+" ("+Text(value,"size_bytes")+" bytes). Existing files were not overwritten.";
+        if(tool=="check_task_completion")return "Task completion: can_finish="+Text(value,"can_finish")+", state="+Text(value,"state")+". "+Text(value,"next_action");
         return tool+" completed"+(path.Length>0?": "+path:"")+". See structuredContent.result for details.";
     }
     static string Clip(string text){return text.Length>500?text.Substring(0,500)+"…":text;}
@@ -47,6 +49,8 @@ static class WorkspaceContracts
             p["output"]=str;p["exit_code"]=integer;p["truncated"]=boolean;p["timed_out"]=boolean;required=new[]{"path","output","exit_code"};
         }else if(tool=="list_commands"){
             p["commands"]=ArrayOf(Shape(new Dictionary<string,object>{{"session_id",str},{"running",boolean},{"exit_code",Nullable("integer")}},"session_id","running"));p["count"]=integer;required=new[]{"commands","count"};
+        }else if(tool=="check_task_completion"){
+            p["can_finish"]=boolean;p["state"]=str;p["unfinished_steps"]=ArrayOf(str);p["missing_evidence"]=ArrayOf(str);p["running"]=boolean;p["reason"]=str;p["next_action"]=str;p["last_issue"]=str;p["last_issue_at"]=Nullable("string");p["resume_prompt"]=str;required=new[]{"path","can_finish","state","next_action"};
         }else if(tool=="update_plan"){
             p["plan"]=ArrayOf(Shape(new Dictionary<string,object>{{"step",str},{"status",new{@enum=new[]{"pending","in_progress","completed"}}}},"step","status"));p["thread_id"]=str;p["explanation"]=str;p["updated_at"]=str;required=new[]{"path","plan"};
         }else if(tool=="open_workspace"){
@@ -58,6 +62,6 @@ static class WorkspaceContracts
         else if(tool=="write_file"||tool=="edit_file"){p["diff"]=Type("object");p["created"]=boolean;required=new[]{"path","diff"};}
         else if(tool=="apply_patch"||tool=="show_changes"){p["files"]=ArrayOf(Type("object"));p["count"]=integer;p["partial"]=boolean;required=new[]{"files","count"};}
         var error=Shape(new Dictionary<string,object>{{"error_code",str},{"message",str}},"error_code","message");
-        return new{type="object",properties=new{tool=new{@enum=new[]{tool}},result=new{anyOf=new[]{Shape(p,required),error}},isError=boolean,thread_id=str},required=new[]{"tool","result","isError"},additionalProperties=false};
+        return new{type="object",properties=new{tool=new{@enum=new[]{tool}},result=new{anyOf=new[]{Shape(p,required),error}},isError=boolean,thread_id=str,task=Nullable("object")},required=new[]{"tool","result","isError"},additionalProperties=false};
     }
 }
