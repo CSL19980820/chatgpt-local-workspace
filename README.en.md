@@ -23,6 +23,8 @@ Let ChatGPT work directly on your machine through the **official OpenAI tunnel**
 
 ![Patch review view](docs/images/dashboard-patch-review.png)
 
+Release history (newest first): [all upgrade notes](UPGRADE-NOTES.md). Version identifiers and tool counts below refer to each release. The current version is **2.2.1**; follow Quick start below for installation and verification.
+
 ## New in 2.2.1: task details on demand
 
 The plan header now has one subtle **Task details** button. Reasons, next actions and copyable prompts appear only after clicking it. Polling and state changes never reopen a closed panel. You can also send “continue” directly in the original conversation.
@@ -31,34 +33,38 @@ The plan header now has one subtle **Task details** button. Reasons, next action
 
 Historical execution records stay collapsed. Completed steps without per-step evidence use neutral wording instead of a persistent warning card. Completion checks remain intact; plan-wide explanations are not silently treated as per-step verification. See [2.2.1 release notes](docs/RELEASE-2.2.1.md).
 
+![Task details after clicking](docs/images/dashboard-task-details.png)
+
+Screenshots use isolated test data.
+
+## New in 2.2.0: task completion checks and continuation prompts
+
 - `check_task_completion` checks pending steps, missing declared evidence, active commands and execution failures not yet acknowledged by a later plan update.
 - `update_plan` adds per-step `evidence` and `task_state`, `reason`, `next_action`. Blocked or explicitly user-paused tasks require a concrete reason and next action. Progress-only updates preserve these states.
 - Tool receipts include scoped task reminders. Removing unfinished steps requires a scope-change explanation; successful tool calls do not imply task completion.
 - After two minutes without observed operations, unfinished tasks show an unconfirmed idle state. A plan step marked in progress alone no longer produces a running spinner.
 
-![Task details after clicking](docs/images/dashboard-task-details.png)
+**Checks use model-declared evidence and local execution state; they do not independently verify the work, prevent a ChatGPT final response or start another turn.** Copying does not send a message or grant new authority. State remains process-local and must be registered again after restart. See [2.2.0 release notes](docs/RELEASE-2.2.0.md).
 
-The screenshot uses isolated test data. **Checks use model-declared evidence and local execution state; they do not independently verify the work, prevent a ChatGPT final response or start another turn.** Copying does not send a message or grant new authority. State remains process-local and must be registered again after restart. See [2.2.0 release notes](docs/RELEASE-2.2.0.md).
-
-Refresh tools after upgrading and verify `version: 2.2.1` / `tool_count: 26`. Track the full task, add actual evidence after verification, then call `check_task_completion` before final delivery. If `can_finish` is false, continue authorized work or record the concrete blocker.
+This release reports `version: 2.2.0` / `tool_count: 26`. Track the full task, add actual evidence after verification, then call `check_task_completion` before final delivery. If `can_finish` is false, continue authorized work or record the concrete blocker.
 
 ## New in 2.1.0: session grouping, attachments and diagnostics
 
 - **Automatic conversation grouping:** calls carrying official `openai/session` metadata share a local timeline. Clients without that metadata retain explicit registration and `thread_id` support.
 - **Chat attachment import:** the new `import_file` tool accepts the official file input contract and creates a new local file, up to 32 MiB, with a size, MIME type and SHA256 receipt. Existing destinations are never overwritten.
-- **Concise receipts:** `content` is a short summary; full data is in `structuredContent.result`. Each of the 26 tools declares its output shape. Image reads still return native image content.
+- **Concise receipts:** `content` is a short summary; full data is in `structuredContent.result`. Each of the 25 tools declares its output shape. Image reads still return native image content.
 - **Connection diagnostics:** the dashboard header and desktop More menu check configuration, tunnel liveness/readiness, handshake, tool discovery, successful calls and session metadata. Unobserved steps remain pending; checks do not restart connections.
 
 ![Connection diagnostics](docs/images/dashboard-diagnostics.png)
 
 The screenshot comes from an isolated local MCP test process, so tunnel checks are unavailable. Synthetic host metadata, real public HTTPS downloads and browser interactions were tested. Session forwarding and attachment selection in an actual ChatGPT account remain host-dependent. Based on the official [plugin reference](https://developers.openai.com/plugins/reference), [MCP server guide](https://developers.openai.com/plugins/build/mcp-server) and [Secure MCP Tunnels guide](https://developers.openai.com/api/docs/guides/secure-mcp-tunnels).
 
-Exit the old application before launching the new binary, refresh ChatGPT tools, and verify `version: 2.2.1` / `tool_count: 26` in a new conversation. Custom clients parsing JSON from `content[0].text` must switch to `structuredContent.result`. See [release notes](docs/RELEASE-2.1.0.md).
+This release reports `version: 2.1.0` / `tool_count: 25`. Starting with this version, custom clients parsing JSON from `content[0].text` must switch to `structuredContent.result`. See [release notes](docs/RELEASE-2.1.0.md).
 
 ## Retained from 2.0.2
 
 - **Actual image previews:** inspect the exact PNG, JPEG, GIF or WebP bytes returned by `read_image`, switch between fit and original size, and see dimensions, format, size and location. Later file edits do not change a captured preview.
-- **Useful workspace status:** version, executable, dashboard URL, shell, running commands, registered workspace paths and all 26 tools appear in the inspector.
+- **Useful workspace status:** version, executable, dashboard URL, shell, running commands, registered workspace paths and all 24 tools available in 2.0.2 appear in the inspector.
 - **Open locations in Windows:** click workspace paths, file details, directory entries, search results, patch paths and command working directories. Directories open in Explorer; files are selected in Explorer; HTTP/HTTPS links open in the default browser. Clicking an executable or script does not run it.
 - **Consistent controls:** soft button surfaces replace native black outlines, with visible keyboard focus and light/dark support.
 
