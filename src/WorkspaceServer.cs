@@ -18,7 +18,7 @@ static class WorkspaceServer
     [ThreadStatic] internal static string CurrentThread;
     static readonly object CommandsGate=new object();
     static readonly System.Collections.Concurrent.BlockingCollection<Action> Work=new System.Collections.Concurrent.BlockingCollection<Action>(128);
-    public const string Version="2.2.0";
+    public const string Version="2.2.1";
     // 2026-07-28 modern era: stateless per-request negotiation; the legacy initialize handshake keeps serving 2025-06-18 clients.
     public const string ModernVersion="2026-07-28";
     const string PvKey="io.modelcontextprotocol/protocolVersion",CapsKey="io.modelcontextprotocol/clientCapabilities",ServerInfoKey="io.modelcontextprotocol/serverInfo",TasksExt="io.modelcontextprotocol/tasks";

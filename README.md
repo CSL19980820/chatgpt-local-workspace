@@ -4,7 +4,7 @@
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-green" alt="MIT License"></a>
   <img src="https://img.shields.io/badge/platform-Windows%2010%2F11%20x64-blue" alt="Windows 10/11 x64">
   <img src="https://img.shields.io/badge/.NET%20Framework-4.8-orange" alt=".NET Framework 4.8">
-  <img src="https://img.shields.io/badge/version-2.2.0-brightgreen" alt="v2.2.0">
+  <img src="https://img.shields.io/badge/version-2.2.1-brightgreen" alt="v2.2.1">
 </p>
 
 <p align="center">
@@ -23,20 +23,24 @@
 
 ![补丁审阅视图](docs/images/dashboard-patch-review.png)
 
-## 2.2.0：未完成任务检查与续做提示
+## 2.2.1：任务提示按需查看
 
-工作做到一半就收尾时，工作台现在会持续显示未完成项、缺少的验收证据、最近执行问题及下一步。计划折叠后仍可看见状态，并可**复制续做提示**发回原对话。
+计划标题旁只保留一个轻量的 **任务详情** 按钮，默认不再显示大块提醒。点击后才查看原因、下一步或复制提示，关闭后不会被轮询或状态变化自动打开。你也可以直接在原对话中发“继续”。
+
+![任务详情按钮](docs/images/dashboard-task-button.png)
+
+历史执行记录默认折叠。步骤已完成但未填写逐步证据时，显示“证据未逐项登记”，不再以“等待验收”大卡片催促续做；完整的完成检查仍保留，不会把总说明自动当成逐项验收证据。详见 [2.2.1 发行说明](docs/RELEASE-2.2.1.md)。
 
 - 新增 `check_task_completion`：交付前检查是否仍有未完成步骤、缺少登记证据、运行中的命令，或尚未记录恢复的执行失败。
 - `update_plan` 增加步骤 `evidence`、任务 `task_state`、`reason` 与 `next_action`。阻塞和用户要求的暂停必须填写具体原因与下一步；普通进度更新会保留已有阻塞/暂停状态。
 - 后续工具回执附带当前对话的任务提示。工具调用成功不再被当作整个任务已完成；静默移除未完成步骤会被拒绝，调整范围需说明原因。
 - 超过两分钟没有新操作且仍有未完成工作时显示“暂无新调用 · 待确认”。计划里的“进行中”不会单独制造运行转圈；只有观察到实际执行时才显示运行状态。
 
-![任务检查与续做提示](docs/images/dashboard-task-completion.png)
+![点击后查看任务详情](docs/images/dashboard-task-details.png)
 
 截图为隔离测试数据。**完成检查依据模型登记的证据和本地执行状态，并非独立验收。插件不能阻止 ChatGPT 结束回复，也不能强制开启下一轮。** 复制提示不会自动发送，不新增部署、删除或对外操作授权。计划和执行记录仍保存在当前进程内，重启后需从原对话重新登记。详见 [2.2.0 发行说明](docs/RELEASE-2.2.0.md)。
 
-升级后在 ChatGPT 刷新工具，确认 `version: 2.2.0`、`tool_count: 26`。多步骤任务使用 `update_plan` 记录完整目标，实际验证后补充 `evidence`，结束前调用 `check_task_completion`；返回 `can_finish: false` 时继续处理，或如实登记必要阻塞。
+升级后在 ChatGPT 刷新工具，确认 `version: 2.2.1`、`tool_count: 26`。多步骤任务使用 `update_plan` 记录完整目标，实际验证后补充 `evidence`，结束前调用 `check_task_completion`；返回 `can_finish: false` 时继续处理，或如实登记必要阻塞。
 
 ## 2.1.0：自动归组、附件导入与连接诊断
 
@@ -49,7 +53,7 @@
 
 诊断截图来自隔离的本地 MCP 验收进程，因此隧道显示“未检查”。已验证模拟宿主元数据、真实公网 HTTPS 文件导入及浏览器交互；ChatGPT Tunnel 是否转发会话元数据、具体账号是否提供附件选择，仍以实际宿主调用为准。协议依据见 [OpenAI 插件参考](https://developers.openai.com/plugins/reference)、[MCP 工具实现](https://developers.openai.com/plugins/build/mcp-server) 与 [Secure MCP Tunnels](https://developers.openai.com/api/docs/guides/secure-mcp-tunnels)。
 
-升级时退出旧程序后启动新版，在 ChatGPT 设置中刷新工具并新开聊天，核对 `version: 2.2.0`、`tool_count: 26`。读取 `content[0].text` JSON 的自建客户端需改为读取 `structuredContent.result`。完整说明见 [2.1.0 发行说明](docs/RELEASE-2.1.0.md)。
+升级时退出旧程序后启动新版，在 ChatGPT 设置中刷新工具并新开聊天，核对 `version: 2.2.1`、`tool_count: 26`。读取 `content[0].text` JSON 的自建客户端需改为读取 `structuredContent.result`。完整说明见 [2.1.0 发行说明](docs/RELEASE-2.1.0.md)。
 
 ## 延续 2.0.2 的工作台体验
 
@@ -120,7 +124,7 @@
 
 > 调用 get_workspace_status 确认连接
 
-应返回 `version: 2.2.0`、`tool_count: 26`、`protocol_versions`、实际程序路径和进程实例 ID。**原始日志**页签会依次出现 `initialize`、`tools/list` 与工具回执——仅"已连接"不能证明 ChatGPT 已刷新工具。
+应返回 `version: 2.2.1`、`tool_count: 26`、`protocol_versions`、实际程序路径和进程实例 ID。**原始日志**页签会依次出现 `initialize`、`tools/list` 与工具回执——仅"已连接"不能证明 ChatGPT 已刷新工具。
 
 ## 怎么用（调用方式）
 

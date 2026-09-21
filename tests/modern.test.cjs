@@ -43,7 +43,7 @@ async function main() {
   assert.equal(list.tools.length, 26);
   assert.equal(list.cacheScope, 'private'); assert(list.ttlMs > 0);
   assert(list.tools.every(t => Array.isArray(t.icons) && t.icons[0].src.startsWith('data:image/svg+xml;base64,') && t.icons[0].mimeType === 'image/svg+xml'), 'icons missing');
-  assert.equal(list._meta['io.modelcontextprotocol/serverInfo'].version, '2.2.0');
+  assert.equal(list._meta['io.modelcontextprotocol/serverInfo'].version, '2.2.1');
   const ping = await modern('ping', {});
   assert.equal(ping.error.code, -32601, 'ping must be removed in the modern era');
 
@@ -145,7 +145,7 @@ async function main() {
   assert.equal(legacyList.result.tools.length, 26);
   assert(legacyList.result.resultType === undefined && legacyList.result.ttlMs === undefined, 'legacy tools/list must stay unchanged');
   const legacyStatus = await request('tools/call', { name: 'get_workspace_status', arguments: {} });
-  assert.equal(legacyStatus.result.structuredContent.result.version, '2.2.0');
+  assert.equal(legacyStatus.result.structuredContent.result.version, '2.2.1');
   assert(legacyStatus.result.structuredContent.result.protocol_versions.some(v => v.includes(PV)));
   console.log('PASS modern era: discover, negotiation, resultType/cache fields, icons, trace, MRTR gate, tasks lifecycle, legacy fallback');
 }

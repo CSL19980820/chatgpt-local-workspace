@@ -4,7 +4,7 @@
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-green" alt="MIT License"></a>
   <img src="https://img.shields.io/badge/platform-Windows%2010%2F11%20x64-blue" alt="Windows 10/11 x64">
   <img src="https://img.shields.io/badge/.NET%20Framework-4.8-orange" alt=".NET Framework 4.8">
-  <img src="https://img.shields.io/badge/version-2.2.0-brightgreen" alt="v2.2.0">
+  <img src="https://img.shields.io/badge/version-2.2.1-brightgreen" alt="v2.2.1">
 </p>
 
 <p align="center">
@@ -23,20 +23,24 @@ Let ChatGPT work directly on your machine through the **official OpenAI tunnel**
 
 ![Patch review view](docs/images/dashboard-patch-review.png)
 
-## New in 2.2.0: unfinished-task checks and continuation prompts
+## New in 2.2.1: task details on demand
 
-The dashboard now keeps unfinished work, missing evidence, execution issues and the next action visible even when the plan is collapsed. **Copy continuation prompt** prepares text to send back to the original conversation.
+The plan header now has one subtle **Task details** button. Reasons, next actions and copyable prompts appear only after clicking it. Polling and state changes never reopen a closed panel. You can also send “continue” directly in the original conversation.
+
+![Task details button](docs/images/dashboard-task-button.png)
+
+Historical execution records stay collapsed. Completed steps without per-step evidence use neutral wording instead of a persistent warning card. Completion checks remain intact; plan-wide explanations are not silently treated as per-step verification. See [2.2.1 release notes](docs/RELEASE-2.2.1.md).
 
 - `check_task_completion` checks pending steps, missing declared evidence, active commands and execution failures not yet acknowledged by a later plan update.
 - `update_plan` adds per-step `evidence` and `task_state`, `reason`, `next_action`. Blocked or explicitly user-paused tasks require a concrete reason and next action. Progress-only updates preserve these states.
 - Tool receipts include scoped task reminders. Removing unfinished steps requires a scope-change explanation; successful tool calls do not imply task completion.
 - After two minutes without observed operations, unfinished tasks show an unconfirmed idle state. A plan step marked in progress alone no longer produces a running spinner.
 
-![Task check and continuation prompt](docs/images/dashboard-task-completion.png)
+![Task details after clicking](docs/images/dashboard-task-details.png)
 
 The screenshot uses isolated test data. **Checks use model-declared evidence and local execution state; they do not independently verify the work, prevent a ChatGPT final response or start another turn.** Copying does not send a message or grant new authority. State remains process-local and must be registered again after restart. See [2.2.0 release notes](docs/RELEASE-2.2.0.md).
 
-Refresh tools after upgrading and verify `version: 2.2.0` / `tool_count: 26`. Track the full task, add actual evidence after verification, then call `check_task_completion` before final delivery. If `can_finish` is false, continue authorized work or record the concrete blocker.
+Refresh tools after upgrading and verify `version: 2.2.1` / `tool_count: 26`. Track the full task, add actual evidence after verification, then call `check_task_completion` before final delivery. If `can_finish` is false, continue authorized work or record the concrete blocker.
 
 ## New in 2.1.0: session grouping, attachments and diagnostics
 
@@ -49,7 +53,7 @@ Refresh tools after upgrading and verify `version: 2.2.0` / `tool_count: 26`. Tr
 
 The screenshot comes from an isolated local MCP test process, so tunnel checks are unavailable. Synthetic host metadata, real public HTTPS downloads and browser interactions were tested. Session forwarding and attachment selection in an actual ChatGPT account remain host-dependent. Based on the official [plugin reference](https://developers.openai.com/plugins/reference), [MCP server guide](https://developers.openai.com/plugins/build/mcp-server) and [Secure MCP Tunnels guide](https://developers.openai.com/api/docs/guides/secure-mcp-tunnels).
 
-Exit the old application before launching the new binary, refresh ChatGPT tools, and verify `version: 2.2.0` / `tool_count: 26` in a new conversation. Custom clients parsing JSON from `content[0].text` must switch to `structuredContent.result`. See [release notes](docs/RELEASE-2.1.0.md).
+Exit the old application before launching the new binary, refresh ChatGPT tools, and verify `version: 2.2.1` / `tool_count: 26` in a new conversation. Custom clients parsing JSON from `content[0].text` must switch to `structuredContent.result`. See [release notes](docs/RELEASE-2.1.0.md).
 
 ## Retained from 2.0.2
 
@@ -115,7 +119,7 @@ In a new chat, say:
 
 > Call get_workspace_status to confirm the connection
 
-It should return `version: 2.2.0`, `tool_count: 26`, `protocol_versions`, the actual executable path and this process's instance ID. The desktop log shows `initialize`, `tools/list` and tool receipts in order — "tunnel connected" alone does not prove ChatGPT refreshed the tools.
+It should return `version: 2.2.1`, `tool_count: 26`, `protocol_versions`, the actual executable path and this process's instance ID. The desktop log shows `initialize`, `tools/list` and tool receipts in order — "tunnel connected" alone does not prove ChatGPT refreshed the tools.
 
 ## Usage (how tools get called)
 
