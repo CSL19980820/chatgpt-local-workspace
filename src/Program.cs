@@ -42,6 +42,7 @@ class MainForm:Form
     public MainForm(bool previewOnly=false)
     {
         preview=previewOnly;if(!preview)Directory.CreateDirectory(data);string settings=Path.Combine(data,"settings.json");cfg=!preview&&File.Exists(settings)?json.Deserialize<Settings>(File.ReadAllText(settings)):new Settings();
+        if(!preview){if(!string.IsNullOrEmpty(cfg.Key)){WorkspaceCredentials.Save(cfg.Key);WorkspaceStore.AtomicWrite(settings,Encoding.UTF8.GetBytes(json.Serialize(new{Tunnel=cfg.Tunnel})));}else cfg.Key=WorkspaceCredentials.Read();}
         appIcon=Icon.ExtractAssociatedIcon(Application.ExecutablePath);Icon=appIcon;Text="本地工作区 · "+WorkspaceServer.Version;ClientSize=new Size(1000,640);MinimumSize=new Size(820,480);Font=Theme.Body;StartPosition=FormStartPosition.CenterScreen;BackColor=Theme.Window;
         var layout=new TableLayoutPanel{Dock=DockStyle.Fill,ColumnCount=1,RowCount=3};layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent,100));Controls.Add(layout);
         layout.RowStyles.Add(new RowStyle(SizeType.Absolute,48));layout.RowStyles.Add(new RowStyle(SizeType.Absolute,38));layout.RowStyles.Add(new RowStyle(SizeType.Percent,100));
@@ -159,7 +160,7 @@ class MainForm:Form
         if(appIcon!=null)g.DrawIcon(appIcon,new Rectangle(cx-20,cy-150,40,40));
     }
     void OpenExternal(string url){if(url==null)return;try{Process.Start(new ProcessStartInfo(url){UseShellExecute=true});}catch(Exception ex){Log("浏览器打开失败："+ex.Message+"，可复制工作台链接手动打开。");}}
-    void Save(){if(preview)return;cfg.Tunnel=tunnelInput.Text.Trim();cfg.Key=keyInput.Text.Trim();File.WriteAllText(Path.Combine(data,"settings.json"),json.Serialize(cfg));}
+    void Save(){if(preview)return;cfg.Tunnel=tunnelInput.Text.Trim();cfg.Key=keyInput.Text.Trim();WorkspaceCredentials.Save(cfg.Key);WorkspaceStore.AtomicWrite(Path.Combine(data,"settings.json"),Encoding.UTF8.GetBytes(json.Serialize(new{Tunnel=cfg.Tunnel})));}
     void SetContext(string text){contextText=text;contextLabel.Text=text;contextLabel.Cursor=string.IsNullOrEmpty(healthUrl)?Cursors.Default:Cursors.Hand;}
     void ShowConfigError()
     {
@@ -238,7 +239,7 @@ class MainForm:Form
     {
         AppContext.SetSwitch("Switch.System.IO.UseLegacyPathHandling",false);AppContext.SetSwitch("Switch.System.IO.BlockLongPaths",false);
         WebviewLoader.Hook();
-        if(args.Length>0&&args[0]=="--mcp"){WorkspaceServer.Run();return;}
+        if(args.Length>0&&args[0]=="--mcp"){try{WorkspaceServer.Run();}catch(Exception ex){Console.Error.WriteLine("[Workspace] runtime failed: "+ex.GetBaseException().Message);Environment.ExitCode=1;}return;}
         if(args.Length>1&&args[0]=="--preview"){Application.EnableVisualStyles();using(var f=new MainForm(true)){f.Show();string demo=Path.Combine(Path.GetTempPath(),"workspace-preview").Replace('\\','/');f.Log("预览模式：未启动隧道，未读取或修改现有配置。");f.Log("[Workspace] read_file | "+demo+"/README.md | OK · 200 行");f.Log("[Workspace] edit_file | "+demo+"/example.ts | OK · +3 / -1");f.FlushLogs();Application.DoEvents();
             if(args.Length>2){f.SetDashboardUrl(args[2]);f.WaitWorkbench(9000);}
             Application.DoEvents();using(var bmp=new Bitmap(f.Width,f.Height)){f.DrawToBitmap(bmp,new Rectangle(0,0,f.Width,f.Height));bmp.Save(args[1]);}

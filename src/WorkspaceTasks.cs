@@ -4,14 +4,14 @@ using System.Linq;
 using System.Collections;
 using System.Collections.Generic;
 
-// Process-local task receipts. This checks declared evidence and observed execution;
+// Locally persisted task receipts. This checks declared evidence and observed execution;
 // it cannot verify the meaning of evidence or restart the host model after a final reply.
 static class WorkspaceTasks
 {
-    sealed class Step { public string step {get;set;} public string status {get;set;} public string evidence {get;set;} }
-    sealed class Plan { public string Thread,Path,Explanation,State,Reason,Next; public DateTime Updated; public Step[] Steps; }
+    public sealed class Step { public string step {get;set;} public string status {get;set;} public string evidence {get;set;} public string[] activity_ids {get;set;} }
+    public sealed class Plan { public string Thread,Path,Explanation,State,Reason,Next,ResolvedIssue,RecoveryNote,RecoveryEvidence; public DateTime Updated; public Step[] Steps; }
     static readonly object Gate=new object();
-    static readonly Dictionary<string,Plan> Plans=new Dictionary<string,Plan>(StringComparer.OrdinalIgnoreCase);
+    static readonly Dictionary<string,Plan> Plans=WorkspaceStore.Load("plans",()=>new Dictionary<string,Plan>(StringComparer.OrdinalIgnoreCase));
     static string Key(string path,string thread){return thread+"|"+path;}
     static string Text(IDictionary<string,object> map,string key,string fallback=""){object value;if(!map.TryGetValue(key,out value))return fallback;if(!(value is string))throw new ArgumentException(key+" must be a string");return (string)value;}
     public static object Update(string path,object steps,string explanation,Dictionary<string,object> args)
@@ -26,22 +26,26 @@ static class WorkspaceTasks
         var validated=new List<Step>();
         foreach(var item in list){var row=item as Dictionary<string,object>;if(row==null)throw new ArgumentException("Invalid plan step");string text=Text(row,"step"),status=Text(row,"status"),evidence=Text(row,"evidence");
             if(string.IsNullOrWhiteSpace(text)||text.Length>240||!new[]{"pending","in_progress","completed"}.Contains(status)||evidence.Length>1000)throw new ArgumentException("Each step requires step (1..240 chars), status and optional evidence (max 1000 chars)");
-            validated.Add(new Step{step=text,status=status,evidence=status=="completed"?evidence:""});}
+            string[] refs=new string[0];object raw;if(row.TryGetValue("activity_ids",out raw)){var ids=raw as IList;if(ids==null||ids.Count>20)throw new ArgumentException("activity_ids must be an array of at most 20 IDs");refs=ids.Cast<object>().Select(x=>x as string).ToArray();if(refs.Any(id=>string.IsNullOrEmpty(id)||!WorkspaceActivity.Evidence(id,path,thread,DateTime.MinValue)))throw new ArgumentException("Evidence ID must refer to a successful completed activity in this conversation and workspace");}
+            validated.Add(new Step{step=text,status=status,evidence=status=="completed"?evidence:"",activity_ids=status=="completed"?refs:new string[0]});}
         if(validated.Count(x=>x.status=="in_progress")>1)throw new ArgumentException("Only one plan step may be in_progress");
-        var plan=new Plan{Thread=thread,Path=path,Explanation=explanation,State=state,Reason=state=="active"?"":reason,Next=next,Steps=validated.ToArray(),Updated=DateTime.UtcNow};
+        var plan=new Plan{Thread=thread,Path=path,Explanation=explanation,State=state,Reason=state=="active"?"":reason,Next=next,Steps=validated.ToArray(),Updated=DateTime.UtcNow,ResolvedIssue=Text(args,"resolved_issue_id"),RecoveryNote=Text(args,"recovery_note"),RecoveryEvidence=Text(args,"recovery_evidence_id")};
+        if(plan.RecoveryNote.Length>1000)throw new ArgumentException("recovery_note exceeds 1000 characters");
+        if(plan.ResolvedIssue.Length>0&&string.IsNullOrWhiteSpace(plan.RecoveryNote))throw new ArgumentException("Resolving an observed failure requires recovery_note describing the fix or why it is no longer relevant");
         lock(Gate){Plan previous;string key=Key(path,thread);if(Plans.TryGetValue(key,out previous)){
                 if(!args.ContainsKey("task_state")&&previous.State!="active"){plan.State=previous.State;plan.Reason=previous.Reason;plan.Next=previous.Next;}
+                if(!args.ContainsKey("resolved_issue_id")){plan.ResolvedIssue=previous.ResolvedIssue;plan.RecoveryNote=previous.RecoveryNote;plan.RecoveryEvidence=previous.RecoveryEvidence;}
                 // Retain an unchanged completed step's evidence on progress-only updates.
-                for(int i=0;i<plan.Steps.Length;i++){var step=plan.Steps[i];if(step.status=="completed"&&!((Dictionary<string,object>)list[i]).ContainsKey("evidence")){var old=previous.Steps.FirstOrDefault(x=>x.step==step.step&&x.status=="completed");if(old!=null)step.evidence=old.evidence;}}
+                for(int i=0;i<plan.Steps.Length;i++){var step=plan.Steps[i];if(step.status=="completed"&&!((Dictionary<string,object>)list[i]).ContainsKey("evidence")){var old=previous.Steps.FirstOrDefault(x=>x.step==step.step&&x.status=="completed");if(old!=null){step.evidence=old.evidence;if(!((Dictionary<string,object>)list[i]).ContainsKey("activity_ids"))step.activity_ids=old.activity_ids;}}}
                 if(previous.Steps.Any(x=>x.status!="completed"&&!plan.Steps.Any(y=>y.step==x.step))&&string.IsNullOrWhiteSpace(explanation))throw new ArgumentException("Explain scope changes before removing or renaming unfinished steps; do not drop work to pass completion checks.");
             }else if(Plans.Count>=500)throw new ArgumentException("Plan limit reached (500)");
-            Plans[key]=plan;}
+            Plans[key]=plan;WorkspaceStore.Save("plans",Plans);}
         return View(plan);
     }
     static Plan[] Select(string path,string thread){lock(Gate)return Plans.Values.Where(p=>(thread.Length==0||p.Thread==thread)&&WorkspaceActivity.Within(p.Path,path)).ToArray();}
     public static object[] Read(string path="",string thread=""){return Select(path,thread).Select(p=>View(p)).ToArray();}
     public static object Get(string path,string thread){Plan p;lock(Gate)Plans.TryGetValue(Key(Presentation.DisplayPath(path),thread),out p);return p==null?null:View(p);}
-    static object View(Plan p){return new{thread_id=p.Thread,path=p.Path,explanation=p.Explanation,plan=p.Steps,updated_at=p.Updated.ToString("o"),task_state=p.State,reason=p.Reason,next_action=p.Next,task=Assess(p)};}
+    static object View(Plan p){return new{thread_id=p.Thread,path=p.Path,explanation=p.Explanation,plan=p.Steps,updated_at=p.Updated.ToString("o"),task_state=p.State,reason=p.Reason,next_action=p.Next,recovery_note=p.RecoveryNote,task=Assess(p)};}
     public static object Review(string path,string thread)
     {
         path=Presentation.DisplayPath(Path.GetFullPath(path));Plan p;lock(Gate)Plans.TryGetValue(Key(path,thread),out p);
@@ -51,18 +55,21 @@ static class WorkspaceTasks
     static Dictionary<string,object> Assess(Plan p)
     {
         var observation=WorkspaceActivity.TaskObservation(p.Path,p.Thread);var commands=WorkspaceServer.TaskCommands(p.Path,p.Thread);
-        var unfinished=p.Steps.Where(s=>s.status!="completed").Select(s=>s.step).ToArray();var evidence=p.Steps.Where(s=>s.status=="completed"&&string.IsNullOrWhiteSpace(s.evidence)).Select(s=>s.step).ToArray();
+        var unfinished=p.Steps.Where(s=>s.status!="completed").Select(s=>s.step).ToArray();var evidence=p.Steps.Where(s=>s.status=="completed"&&string.IsNullOrWhiteSpace(s.evidence)&&(s.activity_ids==null||s.activity_ids.Length==0)).Select(s=>s.step).ToArray();
+        var invalidEvidence=p.Steps.Where(s=>s.status=="completed"&&s.activity_ids!=null&&s.activity_ids.Any(id=>!WorkspaceActivity.Evidence(id,p.Path,p.Thread,DateTime.MinValue))).Select(s=>s.step).ToArray();
+        evidence=evidence.Concat(invalidEvidence).Distinct().ToArray();
         bool running=(bool)observation["running"]||(bool)commands["running"];
         DateTime last=(DateTime)observation["last_at"];if(last<p.Updated)last=p.Updated;
-        string issue=Convert.ToString(commands["issue"]);DateTime issueAt=(DateTime)commands["issue_at"];
-        if((DateTime)observation["failure_at"]>issueAt){issueAt=(DateTime)observation["failure_at"];issue=Convert.ToString(observation["failure"]);}
-        // A later plan update can record recovery/evidence; historical failures remain visible.
-        bool unresolved=issue.Length>0&&issueAt>p.Updated;
+        string issue=Convert.ToString(commands["issue"]),issueId=Convert.ToString(commands["issue_id"]);DateTime issueAt=(DateTime)commands["issue_at"];
+        if((DateTime)observation["failure_at"]>issueAt){issueAt=(DateTime)observation["failure_at"];issue=Convert.ToString(observation["failure"]);issueId=Convert.ToString(observation["failure_id"]);}
+        // Updating a timestamp alone never resolves a failure. Closure is explicit and auditable.
+        bool recoveryValid=p.ResolvedIssue==issueId&&!string.IsNullOrWhiteSpace(p.RecoveryNote)&&(string.IsNullOrEmpty(p.RecoveryEvidence)||WorkspaceActivity.Evidence(p.RecoveryEvidence,p.Path,p.Thread,issueAt));
+        bool unresolved=issue.Length>0&&!recoveryValid;
         bool ready=p.State=="active"&&unfinished.Length==0&&evidence.Length==0&&!running&&!unresolved;
         string state=p.State!="active"?p.State:running?"running":unresolved?"needs_attention":ready?"ready":unfinished.Length==0?"verification_required":(DateTime.UtcNow-last).TotalMinutes>=2?"idle_unconfirmed":"active";
         string next=p.Next.Length>0?p.Next:running?"继续读取当前命令的结果，不要重复执行。":unresolved?"检查最近失败，修复或记录具体阻塞，再更新计划。":unfinished.Length>0?"继续完成："+unfinished[0]:evidence.Length>0?"补充实际验收证据："+evidence[0]:"向用户交付结果，并说明验证范围。";
         string resume="继续完成 "+p.Path+" 的原任务。先调用 open_workspace 和 check_task_completion，核对当前文件与运行中的命令，避免重复执行。尚未完成："+(unfinished.Length>0?String.Join("；",unfinished):"核对验收证据")+"。下一步："+next+"。"+(p.State=="active"?"仅在全部验收完成，或明确记录必要阻塞及下一步后结束回复。":"先确认记录的暂停或阻塞条件是否已解除；未解除时不要继续依赖工作。")+" 已记录原因："+(p.Reason.Length>0?p.Reason:"无；无调用不代表模型已停止。")+" 此提示不新增部署、删除或对外操作授权。";
-        return new Dictionary<string,object>{{"path",p.Path},{"state",state},{"can_finish",ready},{"unfinished_steps",unfinished},{"missing_evidence",evidence},{"running",running},{"reason",p.Reason},{"next_action",next},{"last_activity_at",last.ToString("o")},{"last_issue",issue},{"last_issue_at",issueAt==DateTime.MinValue?null:issueAt.ToString("o")},{"resume_prompt",resume},{"evidence_scope","依据模型登记的步骤证据与本进程执行状态；不是独立验收，也不能强制宿主续跑。"}};
+        return new Dictionary<string,object>{{"path",p.Path},{"state",state},{"can_finish",ready},{"unfinished_steps",unfinished},{"missing_evidence",evidence},{"running",running},{"reason",p.Reason},{"next_action",next},{"last_activity_at",last.ToString("o")},{"last_issue",issue},{"last_issue_id",issueId},{"recovery_note",p.RecoveryNote},{"recovery_verified",recoveryValid&&!string.IsNullOrEmpty(p.RecoveryEvidence)},{"last_issue_at",issueAt==DateTime.MinValue?null:issueAt.ToString("o")},{"resume_prompt",resume},{"evidence_scope","依据模型登记的步骤证据与本进程执行状态；不是独立验收，也不能强制宿主续跑。"}};
     }
     public static object Hint(string thread)
     {

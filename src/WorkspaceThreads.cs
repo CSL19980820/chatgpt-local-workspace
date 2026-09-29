@@ -5,9 +5,9 @@ using System.Collections.Generic;
 // Local grouping from host session metadata or explicit registration, never the last caller.
 static class WorkspaceThreads
 {
-    sealed class Conversation { public string Id,Title,Path,ChatId,HostKey; public bool Named; public DateTime Created; }
+    public sealed class Conversation { public string Id,Title,Path,ChatId,HostKey; public bool Named; public DateTime Created; }
     static readonly object Gate=new object();
-    static readonly List<Conversation> Items=new List<Conversation>();
+    static readonly List<Conversation> Items=WorkspaceStore.Load("threads",()=>new List<Conversation>());
     static string Meta(Dictionary<string,object> meta,string name){object value;if(meta==null||!meta.TryGetValue(name,out value))return "";var text=value as string;if(text==null||text.Length>512)throw new ArgumentException("Invalid host conversation metadata");return text;}
     public static string HostKey(Dictionary<string,object> meta)
     {
@@ -28,7 +28,7 @@ static class WorkspaceThreads
             }
             if(bound==null){if(Items.Count>=200)throw new ArgumentException("Conversation limit reached (200)");bound=new Conversation{Id="thread-"+Guid.NewGuid().ToString("N"),Title=path.Length>0?DeriveTitle(path):"ChatGPT 对话",Path=path,ChatId="",HostKey=key,Created=DateTime.UtcNow};Items.Add(bound);}
             if(path.Length>0){bound.Path=path;if(!bound.Named)bound.Title=DeriveTitle(path);}
-            return bound.Id;
+            WorkspaceStore.Save("threads",Items);return bound.Id;
         }
     }
     public static string Validate(string id)
@@ -48,7 +48,7 @@ static class WorkspaceThreads
             if(c==null&&chatId.Length>0)c=Items.Find(x=>x.ChatId==chatId);
             if(c==null){if(Items.Count>=200)throw new ArgumentException("Conversation limit reached for this instance (200)");c=new Conversation{Id="thread-"+Guid.NewGuid().ToString("N"),Created=DateTime.UtcNow,ChatId=""};Items.Add(c);}
             c.Title=title;c.Named=true;c.Path=path;if(chatId.Length>0)c.ChatId=chatId;
-            return new{thread_id=c.Id,title=c.Title,path=c.Path,chat_id=c.ChatId,chat_url=c.ChatId.Length==0?null:"https://chatgpt.com/c/"+c.ChatId,dashboard_url=LocalDashboard.Url+"#thread="+c.Id,instruction="Tell the user this conversation title and dashboard URL BEFORE starting work. Pass thread_id on EVERY subsequent tool call. This is a local grouping ID, not an automatically discovered ChatGPT chat ID."};
+            WorkspaceStore.Save("threads",Items);return new{thread_id=c.Id,title=c.Title,path=c.Path,chat_id=c.ChatId,chat_url=c.ChatId.Length==0?null:"https://chatgpt.com/c/"+c.ChatId,dashboard_url=LocalDashboard.Url+"#thread="+c.Id,instruction="Tell the user this conversation title and dashboard URL BEFORE starting work. Pass thread_id on EVERY subsequent tool call. This is a local grouping ID, not an automatically discovered ChatGPT chat ID."};
         }
     }
     // Title is optional; derive a readable default from the workspace directory so registration only needs a path.

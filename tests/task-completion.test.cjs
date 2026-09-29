@@ -3,7 +3,7 @@ const fs=require('node:fs'),os=require('node:os'),path=require('node:path'),{spa
 const {launchDashboardBrowser}=require('../scripts/browser-launch.cjs');
 test('completion checks, failure receipts, explicit blockers and resumable UI', {timeout:160000}, async t=>{
   const root=fs.mkdtempSync(path.join(os.tmpdir(),'workspace-task-'));
-  const child=spawn(process.env.WORKSPACE_TEST_EXE||path.join(__dirname,'../dist-next/LocalWorkspace.exe'),['--mcp'],{windowsHide:true,stdio:['pipe','pipe','pipe']});
+  const child=spawn(process.env.WORKSPACE_TEST_EXE||path.join(__dirname,'../dist-next/LocalWorkspace.exe'),['--mcp'],{windowsHide:true,stdio:['pipe','pipe','pipe'],env:{...process.env,WORKSPACE_STATE_DIR:path.join(root,'.state')}});
   const exited=new Promise(resolve=>child.once('exit',resolve));let seq=0,buffer='',base='',browser;const pending=new Map();
   child.stderr.on('data',d=>{const m=String(d).match(/\[Dashboard\] (http:\/\/127\.0\.0\.1:\d+\/)/);if(m)base=m[1];});
   child.stdout.on('data',d=>{buffer+=d;let i;while((i=buffer.indexOf('\n'))>=0){const r=JSON.parse(buffer.slice(0,i));buffer=buffer.slice(i+1);const p=pending.get(r.id);if(p){clearTimeout(p.timer);pending.delete(r.id);p.resolve(r);}}});
@@ -28,12 +28,12 @@ test('completion checks, failure receipts, explicit blockers and resumable UI', 
     const running=(await call('exec_command',{cwd:root,shell:'powershell',cmd:'Start-Sleep -Seconds 30',yield_time_ms:0})).structuredContent.result;
     assert.equal((await check()).state,'running');assert.equal((await check()).can_finish,false);
     await call('stop_command',{session_id:running.session_id});assert.equal((await check()).state,'needs_attention');assert.equal((await check()).last_issue,'COMMAND_STOPPED');
-    await update(complete);assert.equal((await check()).can_finish,true);
+    await update(complete);assert.equal((await check()).can_finish,false);await update(complete,{resolved_issue_id:(await check()).last_issue_id,recovery_note:'Intentional stopped fixture reconciled'});assert.equal((await check()).can_finish,true);
     await call('exec_command',{cwd:root,shell:'powershell',cmd:'exit 7',yield_time_ms:3000});assert.equal((await check()).can_finish,false);
-    await update(complete);assert.equal((await check()).can_finish,true);
+    await update(complete);assert.equal((await check()).can_finish,false);await update(complete,{resolved_issue_id:(await check()).last_issue_id,recovery_note:'Intentional failure fixture reconciled'});assert.equal((await check()).can_finish,true);
     const timed=(await call('exec_command',{cwd:root,shell:'powershell',cmd:'Start-Sleep -Seconds 30',yield_time_ms:0,timeout_seconds:1})).structuredContent.result;
     await delay(1500);assert.equal((await check()).last_issue,'COMMAND_TIMEOUT');assert.equal((await check()).can_finish,false);
-    await call('read_command',{session_id:timed.session_id});assert.match((await check()).last_issue,/COMMAND_TIMEOUT/);await update(plan);
+    await call('read_command',{session_id:timed.session_id});assert.match((await check()).last_issue,/COMMAND_TIMEOUT/);await update(plan,{resolved_issue_id:(await check()).last_issue_id,recovery_note:'Intentional timeout fixture reconciled'});
     assert((await update(plan,{task_state:'blocked'})).isError);assert.equal((await check()).state,'active');
     await update(plan,{task_state:'blocked',reason:'缺少目标环境的验收入口',next_action:'取得入口后完成验证并交付'});
     assert.equal((await check()).state,'blocked');assert.equal((await check()).can_finish,false);

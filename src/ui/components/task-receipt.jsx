@@ -16,6 +16,7 @@ export function TaskReceipt({ task, title }) {
     <div className="task-receipt-head"><strong>{labels[task.state] || '待检查'}</strong><span>{task.unfinished_steps?.length ? task.unfinished_steps.length + ' 项未完成' : task.missing_evidence?.length ? '证据未逐项登记' : '全部步骤已登记完成'}</span></div>
     <p>{task.state === 'verification_required' ? '计划中的步骤均已标记完成。证据尚未填写到逐项字段，不代表实际工作没有完成。' : task.next_action}</p>
     {task.reason ? <p className="task-reason">原因：{task.reason}</p> : null}
+    {task.recovery_note ? <details className="task-history"><summary>{task.recovery_verified ? '恢复证据已关联' : '已登记处理说明'}</summary><p>{task.recovery_note}</p></details> : null}
     {task.last_issue ? <details className="task-history"><summary>{task.state === 'needs_attention' ? '最近执行问题' : '历史执行记录'}</summary><p className="task-reason">{task.last_issue}{task.last_issue_at ? ' · ' + new Date(task.last_issue_at).toLocaleString('zh-CN', { hour12: false }) : ''}</p></details> : null}
     {task.missing_evidence?.length ? <details className="task-history"><summary>{task.missing_evidence.length} 项证据未逐项登记</summary><ul>{task.missing_evidence.map((step, index) => <li key={index}>{step}</li>)}</ul></details> : null}
     {task.state === 'idle_unconfirmed' ? <p className="note">超过 2 分钟没有新操作；可能仍在思考，不能据此判断已停止。</p> : null}

@@ -6,7 +6,7 @@ const fs = require('fs'), assert = require('assert'), path = require('path'), os
 const root = fs.mkdtempSync(path.join(os.tmpdir(), 'local-workspace-modern-'));
 const dir = path.join(root, 'sample_space'); fs.mkdirSync(dir);
 const exe = process.env.WORKSPACE_TEST_EXE || path.join(__dirname, '../dist-next/LocalWorkspace.exe');
-const child = spawn(exe, ['--mcp'], { windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'] });
+const child = spawn(exe, ['--mcp'], {windowsHide:true,stdio:['pipe','pipe','pipe'],env:{...process.env,WORKSPACE_STATE_DIR:path.join(root,'.state')}});
 let seq = 0, buffer = ''; const pending = new Map();
 child.stdout.on('data', d => { buffer += d; let at; while ((at = buffer.indexOf('\n')) >= 0) { const msg = JSON.parse(buffer.slice(0, at)); buffer = buffer.slice(at + 1); const p = pending.get(msg.id); if (p) { pending.delete(msg.id); p(msg); } } });
 child.stderr.resume();
@@ -40,10 +40,10 @@ async function main() {
   // 3. Modern tools/list: resultType + CacheableResult fields + icons; ping removed in modern era.
   const list = (await modern('tools/list', {})).result;
   assert.equal(list.resultType, 'complete');
-  assert.equal(list.tools.length, 26);
+  assert.equal(list.tools.length, 28);
   assert.equal(list.cacheScope, 'private'); assert(list.ttlMs > 0);
   assert(list.tools.every(t => Array.isArray(t.icons) && t.icons[0].src.startsWith('data:image/svg+xml;base64,') && t.icons[0].mimeType === 'image/svg+xml'), 'icons missing');
-  assert.equal(list._meta['io.modelcontextprotocol/serverInfo'].version, '2.2.1');
+  assert.equal(list._meta['io.modelcontextprotocol/serverInfo'].version, '2.3.0');
   const ping = await modern('ping', {});
   assert.equal(ping.error.code, -32601, 'ping must be removed in the modern era');
 
@@ -59,6 +59,12 @@ async function main() {
   const traced = activity.structuredContent.result.activity.filter(a => a.trace === trace);
   assert(traced.length >= 1, 'traceparent not recorded on activity: ' + JSON.stringify(activity.structuredContent.result.activity.map(a => a.tool + ':' + a.trace)));
 
+  const dry = await modernCall('write_file', {path:fixture,content:'preview-only',overwrite:true,dry_run:true});
+  assert.equal(dry.resultType,'complete');assert.equal(dry.structuredContent.result.applied,false);assert.equal(fs.readFileSync(fixture,'utf8'),'v1\n');
+  const hiddenDry = await modernCall('apply_patch',{cwd:dir,patch:'*** Begin Patch\n*** Add File: guarded.txt\n+x\n*** End Patch',dry_run:true});
+  assert.equal(hiddenDry.resultType,'input_required','an unknown argument cannot bypass patch confirmation');
+  const restoreGate = await modernCall('restore_change',{change_id:written.structuredContent.result.change_id,apply:true});
+  assert.equal(restoreGate.resultType,'input_required');assert(fs.existsSync(fixture));
   // 5. MRTR: overwrite of an existing file requires confirmation when elicitation is declared.
   const gate = await modernCall('write_file', { path: fixture, content: 'v2\n', overwrite: true });
   assert.equal(gate.resultType, 'input_required', JSON.stringify(gate));
@@ -142,10 +148,10 @@ async function main() {
   const legacyPing = await request('ping');
   assert.deepEqual(legacyPing.result, {});
   const legacyList = await request('tools/list');
-  assert.equal(legacyList.result.tools.length, 26);
+  assert.equal(legacyList.result.tools.length, 28);
   assert(legacyList.result.resultType === undefined && legacyList.result.ttlMs === undefined, 'legacy tools/list must stay unchanged');
   const legacyStatus = await request('tools/call', { name: 'get_workspace_status', arguments: {} });
-  assert.equal(legacyStatus.result.structuredContent.result.version, '2.2.1');
+  assert.equal(legacyStatus.result.structuredContent.result.version, '2.3.0');
   assert(legacyStatus.result.structuredContent.result.protocol_versions.some(v => v.includes(PV)));
   console.log('PASS modern era: discover, negotiation, resultType/cache fields, icons, trace, MRTR gate, tasks lifecycle, legacy fallback');
 }

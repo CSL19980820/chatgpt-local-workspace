@@ -251,7 +251,7 @@ h2 .count{font-weight:400;font-size:10px;color:var(--muted-foreground);font-vari
 .detail-column{display:flex;flex-direction:column;min-height:0;min-width:0;background:var(--background)}
 .detail-head{display:flex;align-items:center;gap:10px;height:46px;flex-shrink:0;padding:0 18px;border-bottom:1px solid var(--border)}
 .detail-head .detail-icon{display:grid;place-items:center;width:24px;height:24px;border-radius:var(--radius-sm);background:var(--muted);color:var(--muted-foreground);flex-shrink:0}
-.detail-head h2{font-size:13px}
+.detail-head h2{font-size:13px;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1}
 .detail-meta{font-size:10px;color:var(--muted-foreground);font-variant-numeric:tabular-nums;white-space:nowrap}
 .detail-meta .sep{opacity:.5;padding:0 5px}
 .spacer{flex:1}
@@ -361,6 +361,8 @@ footer{display:flex;align-items:center;justify-content:space-between;height:26px
 .task-receipts{display:grid;gap:12px}
 .task-receipt{padding:12px 14px;border:1px solid var(--border);border-radius:var(--radius-lg);font-size:12px}
 .task-history{margin:10px 0;color:var(--muted-foreground);font-size:11px}.task-history summary{cursor:pointer}.task-history li{overflow-wrap:anywhere}
+.task-history p{overflow-wrap:anywhere}
+@media(max-width:760px){.detail-head .detail-meta,.detail-head [data-slot="separator"]{display:none}.detail-head .spacer{display:none}}
 .task-receipt-head{display:flex;justify-content:space-between;gap:12px;align-items:baseline}
 .task-receipt-head strong{font-weight:600}.task-receipt-head span,.task-owner{color:var(--muted-foreground);font-size:11px}
 .task-receipt p{margin:7px 0;overflow-wrap:anywhere}.task-receipt .task-reason{font-size:11px;color:var(--muted-foreground)}

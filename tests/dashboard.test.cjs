@@ -1,7 +1,7 @@
 const {spawn}=require('node:child_process');
 const fs=require('node:fs'),os=require('node:os'),path=require('node:path'),assert=require('node:assert/strict'),http=require('node:http'),vm=require('node:vm');
 const root=fs.mkdtempSync(path.join(os.tmpdir(),'workspace-dashboard-test-'));
-const child=spawn(process.env.WORKSPACE_TEST_EXE||path.join(__dirname,'../dist-next/LocalWorkspace.exe'),['--mcp'],{windowsHide:true,stdio:['pipe','pipe','pipe']});
+const child=spawn(process.env.WORKSPACE_TEST_EXE||path.join(__dirname,'../dist-next/LocalWorkspace.exe'),['--mcp'],{windowsHide:true,stdio:['pipe','pipe','pipe'],env:{...process.env,WORKSPACE_STATE_DIR:path.join(root,'.state')}});
 let sequence=0,buffer='',log='',base='';const pending=new Map();
 child.stderr.on('data',d=>{log+=d;const m=log.match(/\[Dashboard\] (http:\/\/127\.0\.0\.1:\d+\/)/);if(m)base=m[1]});
 child.stdout.on('data',d=>{buffer+=d;let at;while((at=buffer.indexOf('\n'))>=0){const m=JSON.parse(buffer.slice(0,at));buffer=buffer.slice(at+1);const p=pending.get(m.id);if(p){clearTimeout(p.timer);pending.delete(m.id);p.resolve(m);}}});

@@ -7,7 +7,7 @@ const { launchDashboardBrowser } = require('../scripts/browser-launch.cjs');
 
 test('2.1 host sessions, attachment contract and actual diagnostic dashboard', { timeout: 150000 }, async t => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'workspace-21-'));
-  const child = spawn(process.env.WORKSPACE_TEST_EXE || path.join(__dirname, '../dist-next/LocalWorkspace.exe'), ['--mcp'], { windowsHide: true, stdio: ['pipe','pipe','pipe'] });
+  const child = spawn(process.env.WORKSPACE_TEST_EXE || path.join(__dirname, '../dist-next/LocalWorkspace.exe'), ['--mcp'], {windowsHide:true,stdio:['pipe','pipe','pipe'],env:{...process.env,WORKSPACE_STATE_DIR:path.join(root,'.state')}});
   const exited = new Promise(resolve => child.once('exit', resolve));
   let seq=0, buffer='', logs='', base='', browser;
   const pending=new Map();
@@ -107,7 +107,7 @@ test('diagnostics runs official doctor and keeps readiness separate from tool su
   const health=require('node:http').createServer((req,res)=>{res.writeHead(req.url==='/healthz'?200:503);res.end();});
   await new Promise(resolve=>health.listen(0,'127.0.0.1',resolve));
   const healthFile=path.join(root,'health.url');fs.writeFileSync(healthFile,'http://127.0.0.1:'+health.address().port);
-  const child=spawn(exe,['--mcp'],{windowsHide:true,stdio:['pipe','pipe','pipe'],env:{...process.env,WORKSPACE_TUNNEL_ID:'invalid-fixture',CONTROL_PLANE_API_KEY:'',WORKSPACE_TUNNEL_HEALTH_FILE:healthFile}});
+  const child=spawn(exe,['--mcp'],{windowsHide:true,stdio:['pipe','pipe','pipe'],env:{...process.env,WORKSPACE_STATE_DIR:path.join(root,'.state'),WORKSPACE_TUNNEL_ID:'invalid-fixture',CONTROL_PLANE_API_KEY:'',WORKSPACE_TUNNEL_HEALTH_FILE:healthFile}});
   const exited=new Promise(resolve=>child.once('exit',resolve));child.stdout.resume();
   try{
     const base=await new Promise((resolve,reject)=>{const timer=setTimeout(()=>reject(Error('No dashboard')),5000);child.stderr.on('data',d=>{const m=String(d).match(/\[Dashboard\] (http:\/\/127\.0\.0\.1:\d+\/)/);if(m){clearTimeout(timer);resolve(m[1]);}});});

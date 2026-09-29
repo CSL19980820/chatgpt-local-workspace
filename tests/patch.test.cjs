@@ -2,7 +2,7 @@ const {spawn}=require('child_process');
 const fs=require('fs'),path=require('path'),os=require('os'),assert=require('assert');
 const root=fs.mkdtempSync(path.join(os.tmpdir(),'workspace-patch-'));
 const exe=process.env.WORKSPACE_TEST_EXE||path.join(__dirname,'../dist-next/LocalWorkspace.exe');
-const child=spawn(exe,['--mcp'],{windowsHide:true,stdio:['pipe','pipe','pipe']});
+const child=spawn(exe,['--mcp'],{windowsHide:true,stdio:['pipe','pipe','pipe'],env:{...process.env,WORKSPACE_STATE_DIR:path.join(root,'.state')}});
 let sequence=0,buffer='';const pending=new Map();
 child.stdout.on('data',d=>{buffer+=d;let n;while((n=buffer.indexOf('\n'))>=0){const msg=JSON.parse(buffer.slice(0,n));buffer=buffer.slice(n+1);if(pending.has(msg.id)){pending.get(msg.id)(msg);pending.delete(msg.id);}}});child.stderr.resume();
 const request=(method,params={})=>new Promise(resolve=>{const id=++sequence;pending.set(id,resolve);child.stdin.write(JSON.stringify({jsonrpc:'2.0',id,method,params})+'\n');});

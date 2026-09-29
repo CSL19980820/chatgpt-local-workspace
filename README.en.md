@@ -4,7 +4,7 @@
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-green" alt="MIT License"></a>
   <img src="https://img.shields.io/badge/platform-Windows%2010%2F11%20x64-blue" alt="Windows 10/11 x64">
   <img src="https://img.shields.io/badge/.NET%20Framework-4.8-orange" alt=".NET Framework 4.8">
-  <img src="https://img.shields.io/badge/version-2.2.1-brightgreen" alt="v2.2.1">
+  <img src="https://img.shields.io/badge/version-2.3.0-brightgreen" alt="v2.3.0">
 </p>
 
 <p align="center">
@@ -23,7 +23,19 @@ Let ChatGPT work directly on your machine through the **official OpenAI tunnel**
 
 ![Patch review view](docs/images/dashboard-patch-review.png)
 
-Release history (newest first): [all upgrade notes](UPGRADE-NOTES.md). Version identifiers and tool counts below refer to each release. The current version is **2.2.1**; follow Quick start below for installation and verification.
+Release history (newest first): [all upgrade notes](UPGRADE-NOTES.md). Version identifiers and tool counts below refer to each release. The current version is **2.3.0**; follow Quick start below for installation and verification.
+
+## New in 2.3.0: reliable execution and recoverable history
+
+Commands support idempotent retry keys and paginated/tail output. File reads return SHA256; edits and writes support optional version guards and dry-run previews. New `workspace_history` and `restore_change` tools provide conflict-checked undo/redo for direct file changes. Shell and remote effects are outside that restore scope.
+
+Conversation bindings, plans, recent activity and bounded file history are encrypted with Windows DPAPI. Completed steps can reference actual activity IDs. Failure closure requires an explicit issue ID and recovery explanation; a plan timestamp alone cannot clear a failure. Commands and image previews do not survive a restart.
+
+Private Git review baselines leave the normal index and branch untouched. API keys move to Windows Credential Manager when the new desktop app starts. This release reports `version: 2.3.0` / `tool_count: 28`; see [release notes](docs/RELEASE-2.3.0.md) and [tool parameters](docs/TOOLS.md).
+
+![Recovery records and execution evidence](docs/images/dashboard-reliability.png)
+
+Screenshot uses isolated test data. Updating files does not upgrade an already running process; close the old application after its tasks finish, start the new EXE and refresh host tool metadata.
 
 ## New in 2.2.1: task details on demand
 
@@ -44,7 +56,7 @@ Screenshots use isolated test data.
 - Tool receipts include scoped task reminders. Removing unfinished steps requires a scope-change explanation; successful tool calls do not imply task completion.
 - After two minutes without observed operations, unfinished tasks show an unconfirmed idle state. A plan step marked in progress alone no longer produces a running spinner.
 
-**Checks use model-declared evidence and local execution state; they do not independently verify the work, prevent a ChatGPT final response or start another turn.** Copying does not send a message or grant new authority. State remains process-local and must be registered again after restart. See [2.2.0 release notes](docs/RELEASE-2.2.0.md).
+**Checks use model-declared evidence and local execution state; they do not independently verify the work, prevent a ChatGPT final response or start another turn.** Copying does not send a message or grant new authority. State in 2.2.x was process-local; 2.3.0 adds encrypted persistence. See [2.2.0 release notes](docs/RELEASE-2.2.0.md).
 
 This release reports `version: 2.2.0` / `tool_count: 26`. Track the full task, add actual evidence after verification, then call `check_task_completion` before final delivery. If `can_finish` is false, continue authorized work or record the concrete blocker.
 
@@ -76,7 +88,7 @@ Screenshots use sample data. Image previews live only in the current process, bo
 
 ## Features
 
-- **26 local tools**: file read/write, precise edits, multi-file patches, search, command execution with incremental output, Git review, execution plans.
+- **28 local tools**: file read/write, precise edits, multi-file patches, search, command execution with incremental output, Git review, execution plans.
 - **Dual-era MCP protocol (v2.0)**: one EXE serves both legacy 2025-06-18 clients (`initialize` handshake — what the ChatGPT Tunnel uses today, compatible handshake and calls) and modern [2026-07-28](https://modelcontextprotocol.io/specification/2026-07-28) stateless clients: `server/discover`, per-request `_meta` version negotiation, `resultType`, cacheable `tools/list` (`ttlMs`/`cacheScope`), MRTR confirmations for destructive operations, the official Tasks extension for long-running commands, OpenTelemetry trace correlation and tool icons.
 - **Standalone live dashboard**: a locally compiled React + shadcn/ui single-page app, synced every second, timelines isolated per conversation, inspector rendered per call type (diffs, command output, file content, search hits). The desktop app embeds it in its first tab (WebView2; falls back to the browser when the runtime is missing).
 - **One-piece desktop shell**: single-row toolbar (combined start/stop, open in browser, more menu) plus four tabs (workbench / operation log / raw log / connection settings); the log views are owner-drawn with level colors, monospace type and tail-follow.
@@ -113,11 +125,11 @@ This happens in **ChatGPT web**, not in this plugin:
 
 ### 3. Connect
 
-Launch `LocalWorkspace.exe`, paste the Tunnel ID and API Key, click **Start**. Settings are stored in `%LOCALAPPDATA%/LocalWorkspacePlugin/settings.json` — **never commit or share this file**.
+Launch `LocalWorkspace.exe`, paste the Tunnel ID and API Key, click **Start**. The Tunnel ID is stored in `%LOCALAPPDATA%/LocalWorkspacePlugin/settings.json`; the API key is stored in Windows Credential Manager. Old plaintext keys migrate on startup.
 
 ### 4. Refresh the plugin in ChatGPT
 
-Open ChatGPT web → **Settings → Connectors → Local Workspace**, scroll to the bottom and click **Refresh** (this is the developer connection page; if the app detail page only shows "Reconnect", use the settings page instead). The action list should then contain all 26 tools.
+Open ChatGPT web → **Settings → Connectors → Local Workspace**, scroll to the bottom and click **Refresh** (this is the developer connection page; if the app detail page only shows "Reconnect", use the settings page instead). The action list should then contain all 28 tools.
 
 ### 5. Verify
 
@@ -125,7 +137,7 @@ In a new chat, say:
 
 > Call get_workspace_status to confirm the connection
 
-It should return `version: 2.2.1`, `tool_count: 26`, `protocol_versions`, the actual executable path and this process's instance ID. The desktop log shows `initialize`, `tools/list` and tool receipts in order — "tunnel connected" alone does not prove ChatGPT refreshed the tools.
+It should return `version: 2.3.0`, `tool_count: 28`, `protocol_versions`, the actual executable path and this process's instance ID. The desktop log shows `initialize`, `tools/list` and tool receipts in order — "tunnel connected" alone does not prove ChatGPT refreshed the tools.
 
 ## Usage (how tools get called)
 
@@ -157,7 +169,7 @@ After connecting, use the embedded workbench or **Open in browser**. Calls are g
 
 The tool returns a local thread ID and a direct dashboard link; subsequent calls are grouped per conversation in the timeline. Add a title to customize the name, or have the model pass a known `chat_id` to bind the real ChatGPT conversation (the same `chat_id` reuses one thread).
 
-> **Association boundaries:** `openai/session` is an anonymous correlation hint, not a ChatGPT `/c/` ID or authentication. The server hashes organization, subject and session together and retains the association only for the current process. Calls without metadata or `thread_id` remain unassigned.
+> **Association boundaries:** `openai/session` is an anonymous correlation hint, not a ChatGPT `/c/` ID or authentication. The server hashes organization, subject and session together and persists the association in encrypted local state. Calls without metadata or `thread_id` remain unassigned.
 
 ### Save a chat attachment locally
 
@@ -165,7 +177,7 @@ The tool returns a local thread ID and a direct dashboard link; subsequent calls
 
 When the host provides file input, the model uses `import_file`. The destination directory must exist and the destination file must be new. HTTPS download failures do not leave a partial destination. Signed URLs are excluded from local logs and receipts. Once saved, other tools can read or process the file. Host attachment support is required.
 
-## The 26 tools
+## The 28 tools
 
 > Full input parameters, types and return fields are in [docs/TOOLS.md](docs/TOOLS.md). The table below only groups them by purpose.
 
@@ -180,11 +192,12 @@ When the host provides file input, the model uses `import_file`. The destination
 | Read text and images | `read_file`, `read_image` |
 | Save chat attachments to new local files | `import_file` |
 | Create directories, write & precise edits | `create_directory`, `write_file`, `edit_file` |
+| File history and conflict-checked undo/redo | `workspace_history`, `restore_change` |
 | Run commands, send stdin | `exec_command`, `write_stdin` |
 | Command list, incremental output, snapshots, stop | `list_commands`, `poll_command`, `read_command`, `stop_command` |
 | Change review | `show_changes`, `git_status`, `git_diff` |
 
-`show_changes` covers only edits made through this process's file tools; `git_status` / `git_diff` also reveal changes from shells or other editors (Git diff excludes untracked file bodies).
+By default, `show_changes` covers edits recorded by this process's file tools. Its `workspace_open` and `last_shown` Git baselines also include external changes and non-ignored new files, using private review refs without changing the normal index or branch. `git_status` / `git_diff` provide the usual Git view (Git diff excludes untracked file bodies).
 
 ## Dashboard details
 
@@ -193,7 +206,7 @@ When the host provides file input, the model uses `import_file`. The destination
 - "Follow latest" is on by default and auto-expands the newest call in the current filter; clicking a historical call pins it.
 - Search, status filter, pause/resume (pausing only stops observation, never the task) and copy-registration-command are supported; on connection loss stale results stay visible and flagged.
 - Calls without a thread ID land in "Unassigned" — no guessing. Thread grouping is visual isolation, not per-account authorization.
-- Activity keeps the latest 100 entries and up to 200 threads for the current MCP process; re-register after a service restart.
+- Activity keeps the latest 100 entries and up to 200 threads in encrypted local state. Unfinished command receipts require reconciliation after restart.
 
 Implementation: sources live in `src/ui/` (React components, Chinese labels in `lib/`), `src/dashboard.css` (Tailwind 4) and `src/dashboard.template.html`. `npm ci && npm run build:ui` compiles CSS with the Tailwind CLI, bundles components with esbuild, and inlines everything into a single `src/dashboard.html` — no CDN, no module loader, no Node at runtime. New builds prefer a `dashboard.html` next to the EXE and fall back to the embedded page.
 
@@ -239,7 +252,7 @@ Verification records: [VERIFICATION.md](VERIFICATION.md). Upgrade notes: [UPGRAD
 
 ## Troubleshooting
 
-**ChatGPT claims it can only read?** Have it call `get_workspace_status` and check version, `tool_count: 26` and connection; then refresh metadata in settings and open a new chat. Don't blame OS permissions for stale chat caches, old plugin versions or a service that isn't running.
+**ChatGPT claims it can only read?** Have it call `get_workspace_status` and check version, `tool_count: 28` and connection; then refresh metadata in settings and open a new chat. Don't blame OS permissions for stale chat caches, old plugin versions or a service that isn't running.
 
 **"Tunnel connected" but tools don't respond?** Tunnel connectivity ≠ ChatGPT refreshed the tools. The desktop log must show `initialize` and `tools/list`.
 
@@ -252,8 +265,8 @@ Verification records: [VERIFICATION.md](VERIFICATION.md). Upgrade notes: [UPGRAD
 - The dashboard listens only on a dynamic `127.0.0.1` port; no remote access or execution endpoints are exposed.
 - Local disks are accessed with the current Windows user's privileges; the workspace is **not** an OS sandbox — run under a trusted account.
 - **There is currently no command-level or path-level guardrail**: `exec_command` runs whatever the model issues with the current user's privileges — no allowlist, and no confirmation prompt even for destructive commands (e.g. `rm -rf`). The file tools refuse path escapes and the tools never auto-`commit`/`push`, but the **shell is unrestricted**. Scope which directories you point the model at and review every step in the live dashboard timeline.
-- `settings.json` contains your API key — never commit, screenshot or share it.
-- Service and activity records live in the current process; reconnect and re-register after restarts.
+- API keys are stored in Windows Credential Manager. Never share old plaintext configuration or credentials.
+- Conversations, plans, recent activity and direct file history are encrypted locally. Command processes, image previews and desktop raw logs remain runtime-local.
 
 ## Protocol compatibility
 
@@ -261,7 +274,7 @@ The server is a **dual-era** implementation: it picks its behaviour from how the
 
 | Era | Trigger | What you get |
 | --- | --- | --- |
-| legacy (2025-06-18) | `initialize` handshake (what the ChatGPT Tunnel uses today) | Compatible handshake: 26 tools, progress notifications, structured output |
+| legacy (2025-06-18) | `initialize` handshake (what the ChatGPT Tunnel uses today) | Compatible handshake: 28 tools, progress notifications, structured output |
 | modern ([2026-07-28](https://modelcontextprotocol.io/specification/2026-07-28)) | request `_meta` carries `io.modelcontextprotocol/protocolVersion` | Stateless per-request negotiation, `server/discover`, `resultType`, cacheable `tools/list` (`ttlMs`/`cacheScope: private`), `serverInfo` on every result |
 
 Modern-era features activate progressively from the capabilities the client declares:

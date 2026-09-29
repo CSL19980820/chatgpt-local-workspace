@@ -1,6 +1,6 @@
-# 工具参数手册（26 个）
+# 工具参数手册（28 个）
 
-本页是 26 个本地工具的输入参数参考，与 `src/WorkspaceServer.cs` 中 `BuildTools()` 注册的 schema 一致。工具由模型按需自动调用，你用自然语言下达任务即可；本页供你核对参数、写自动化或排查调用失败时使用。
+本页是 28 个本地工具的输入参数参考，与 `src/WorkspaceServer.cs` 中 `BuildTools()` 注册的 schema 一致。工具由模型按需自动调用，你用自然语言下达任务即可；本页供你核对参数、写自动化或排查调用失败时使用。
 
 ## 通用约定
 
@@ -42,13 +42,15 @@
 | --- | --- | --- | --- |
 | `path` | string | 是 | 工作目录绝对路径 |
 
+Git 仓库首次打开时会建立私有审阅基准，结果见 `review.available`。该操作不改变正常暂存区、分支或远端。
+
 ### `update_plan` （写入）
-发布简明的执行步骤及其真实状态。最多一个步骤可为 `in_progress`。计划是进程本地的，不是调度器，也不证明工作已完成。
+发布简明的执行步骤及其真实状态。最多一个步骤可为 `in_progress`。计划在本地加密保存；不是调度器，也不证明工作已完成。
 
 | 参数 | 类型 | 必填 | 说明 |
 | --- | --- | --- | --- |
 | `path` | string | 是 | 工作区绝对目录 |
-| `plan` | array | 是 | 1..20 个步骤，每项 `{step: string≤240, status: pending\|in_progress\|completed, evidence?: string≤1000}` |
+| `plan` | array | 是 | 1..20 个步骤，每项 `{step: string≤240, status: pending\|in_progress\|completed, evidence?: string≤1000, activity_ids?: string[]≤20}` |
 | `explanation` | string | 条件 | 最多 2000 字；移除或重命名未完成步骤时必须说明范围变化 |
 | `task_state` | string | 否 | `active` / `blocked` / `paused`；新计划默认 active，已有阻塞/暂停在省略时保留 |
 | `reason` | string | 条件 | blocked / paused 必填，最多 1000 字；具体阻塞或用户明确暂停要求 |
@@ -66,9 +68,9 @@
 
 返回 `can_finish`、`state`、`unfinished_steps`、`missing_evidence`、`running`、`reason`、`next_action`、`last_issue`、`last_issue_at` 和 `resume_prompt`。没有该计划时返回 `state: untracked`、`can_finish: false` 和建立计划的提示。检查调用自身成功不等于 `can_finish: true`，应读取该字段。
 
-状态包括 active、running、needs_attention、verification_required、idle_unconfirmed、blocked、paused 和 ready。所有步骤已登记完成且有证据、没有运行中的命令、没有晚于最后计划更新的失败记录、任务处于 active 时才返回 ready。两分钟无操作仅表示待确认；暂停/阻塞状态必须被尊重。
+状态包括 active、running、needs_attention、verification_required、idle_unconfirmed、blocked、paused 和 ready。所有步骤已登记完成且有证据、没有运行中的命令、没有尚未明确处理的失败记录、任务处于 active 时才返回 ready。两分钟无操作仅表示待确认；暂停/阻塞状态必须被尊重。
 
-检查只核对登记字段及当前进程的有界执行记录，无法独立验证证据、需求完整性或宿主是否结束回复。`resume_prompt` 供复制回原对话，不自动发送或新增授权。
+检查只核对登记字段及本地保存的有界执行记录，无法独立验证证据、需求完整性或宿主是否结束回复。`resume_prompt` 供复制回原对话，不自动发送或新增授权。
 
 ### `apply_patch` （写入）
 应用 Codex 风格多文件补丁：`*** Begin Patch` / `Add|Update|Delete File` / 可选 `Move to` / `@@` 上下文 / `*** End of File` / `*** End Patch`。写入前校验全部改动；拒绝歧义上下文、目标覆盖与路径越界。
@@ -189,6 +191,8 @@
 ## 命令执行
 
 ### `exec_command` （写入，开放世界）
+
+可选 `request_id` 为 1..128 个 ASCII 字母、数字、点、下划线或连字符。同一对话内相同 ID 与执行参数复用原会话；必须具有宿主会话信号或已登记的 thread_id；参数不符拒绝。重启或淘汰后返回 `REQUEST_RECONCILIATION_REQUIRED`，不会再次执行。记录最多 10000 个键，满后须核对并归档停止实例的状态再重置，不自动丢弃旧键。
 运行隐藏 shell 命令。默认 Git Bash；需要 PowerShell 语法时显式传 `shell`。命令在等待窗口后仍在运行会返回 `session_id`，用 `write_stdin` / `poll_command` 续读而不是重跑。无 shell 间自动回退；不支持 PTY（`tty` 只能为 false）。
 
 | 参数 | 类型 | 必填 | 说明 |
@@ -222,6 +226,8 @@
 | `yield_ms` | integer | 否 | 等待 0..10000 ms，默认 1000 |
 
 ### `read_command` （只读）
+
+可选 `offset` 为原始输出的字符位置，负数表示距末尾的字符数；`length` 为 1..32000，默认 8000。返回 `next_offset`、`has_more`、`oldest_offset`、`gap`、`total_characters`；历史淘汰时游标向保留区间起点移动并标明 gap。分页不消费原有增量游标，不返回重复的 `full_output`。
 读取命令输出的有界累计快照，**不消费**它。适合 UI 自动刷新与反复查看；不停止、不重启命令。
 
 | 参数 | 类型 | 必填 | 说明 |
@@ -243,7 +249,7 @@
 ## 修改审阅
 
 ### `show_changes` （只读）
-显示本服务进程中 `write_file` / `edit_file` 记录的前后改动，按目录作用域汇总。**不含** shell 或外部编辑器的改动，且不会重置审阅基准。
+默认 `since=recorded` 保留进程内直接文件工具汇总，不含 shell 或外部编辑。`since=workspace_open` / `last_shown` 返回整个 Git 仓库相对打开时 / 上次标记审阅时的差异，包含非忽略的新文件及外部修改；`mark_reviewed=true` 才推进上次审阅基准，截断时拒绝推进。
 
 | 参数 | 类型 | 必填 | 说明 |
 | --- | --- | --- | --- |
@@ -263,3 +269,23 @@
 | --- | --- | --- | --- |
 | `path` | string | 是 | 已存在的仓库目录 |
 | `staged` | boolean | 否 | 读暂存改动而非未暂存 |
+
+## 2.3.0 增补参数与恢复契约
+
+### 文件版本与预览
+
+`read_file` 新增 `sha256`，是完整原始文件字节的哈希。`write_file` / `edit_file` 新增可选 `expected_sha256: string` 和 `dry_run: boolean`；`missing` 表示预期不存在。成功回执包含 `before_sha256`、`after_sha256`、`applied`、`changed`、`change_id`。无改动或预览不产生可撤销记录。
+
+### 真实活动引用与失败处理
+
+工具回执的 `structuredContent.activity_id` 可填入计划步骤 `activity_ids`。只接受同一对话、同一目录内成功且已结束的实际操作；步骤可继续提供文字 `evidence`。完成检查返回 `last_issue_id`，`update_plan` 可传 `resolved_issue_id` 与必需的 `recovery_note`（最多 1000 字）明确处理该失败；可选 `recovery_evidence_id` 必须指向失败后的成功操作。`recovery_verified` 区分已关联活动和仅登记说明。更新计划时间不自动消除失败。
+
+### `workspace_history`（只读）
+
+必填 `path: string` 为绝对目录；通用 `thread_id` 或宿主信号决定对话。返回当前对话的 `changes`，每项含 `id`、`tool`、`at`、`status`、`undone` 和文件前后哈希。保留上限 100 次操作 / 48 MiB 原始字节；单文件不超过 16 MiB。
+
+### `restore_change`（写入）
+
+必填 `change_id: string`；可选 `redo: boolean=false`、`apply: boolean=false`。默认仅预览。应用时整组校验当前文件状态，不覆盖外部改动。返回 `change_id`、`applied`、`action`、`files`、`count`。支持的现代客户端会在实际恢复前收到 MRTR 确认。
+
+范围仅为 `write_file` / `edit_file` / `apply_patch` 的记录；不包含附件导入或目录创建；不撤销 shell、部署、远程 Git 等副作用，也不删除残留空目录。状态为 prepared/restoring/interrupted 的记录需要人工核对。历史重启恢复及凭据迁移见 [发行说明](RELEASE-2.3.0.md)。

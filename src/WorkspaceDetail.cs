@@ -406,7 +406,9 @@ static class WorkspaceDetail
         if(tool=="write_file")detail=WriteFile(args??new Dictionary<string,object>(),inner,budget);
         else if(tool=="edit_file")detail=Edit(args??new Dictionary<string,object>(),inner,budget);
         else if(tool=="apply_patch")detail=Patch(inner,budget);
-        else if(tool=="show_changes")detail=Review(inner,budget);
+        else if(tool=="show_changes")detail=Field(inner,"output")!=null?Git("git_diff",inner):Review(inner,budget);
+        else if(tool=="restore_change")detail=Review(inner,budget);
+        else if(tool=="workspace_history"){var rows=new List<object>();foreach(var change in Rows(inner,"changes"))rows.Add(new{label=Text(change,"at")+" · "+Text(change,"tool"),value=Text(change,"id")+" · "+(Flag(change,"undone")?"已撤销":Text(change,"status"))});detail=InfoRows(rows,"文件操作历史");}
         else if(tool=="read_file")detail=Read(args??new Dictionary<string,object>(),inner);
         else if(tool=="search_text"||tool=="search_files")detail=Search(tool,inner);
         else if(tool=="exec_command"||tool=="poll_command"||tool=="read_command"||tool=="stop_command"||tool=="write_stdin")detail=Command(tool,args,inner);
@@ -418,6 +420,9 @@ static class WorkspaceDetail
         if(tool=="read_image"&&Text(detail,"path").Length==0){string requested=Display(Text(args,"path"));detail["path"]=requested;detail["name"]=Name(requested);}
         string target=Text(inner,"path");if(target.Length==0)target=Text(inner,"requested_path");if(target.Length==0)target=Text(inner,"cwd");
         if(target.Length==0)target=Text(detail,"path");
+        if(Flag(inner,"request_replayed"))detail["summary"]="复用已有命令 · "+Text(detail,"summary");
+        detail["change_id"]=Field(inner,"change_id");detail["before_sha256"]=Field(inner,"before_sha256");detail["after_sha256"]=Field(inner,"after_sha256");
+        if(Field(inner,"applied")!=null){detail["applied"]=Flag(inner,"applied");if(!Flag(inner,"applied"))detail["is_preview"]=!isError;if(!Flag(inner,"applied"))detail["summary"]="预览 · 未修改文件";}
         detail["tool"]=tool;detail["target"]=Display(target);
         if(isError)
         {

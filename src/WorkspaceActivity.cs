@@ -5,19 +5,29 @@ using System.Collections.Generic;
 // This bounded, process-local journal is independent of the ordered tool worker.
 static class WorkspaceActivity
 {
-    sealed class Entry { public string Id,Tool,Target,Status,Error,Preview,ThreadId,Trace; public DateTime Started; public long Elapsed; public Dictionary<string,object> Detail; }
+    public sealed class Entry { public string Id,Tool,Target,Status,Error,Preview,ThreadId,Trace; public DateTime Started; public bool Verified; public long Elapsed; public Dictionary<string,object> Detail; }
     sealed class Viewer { public string Id,Path,Bridge,Mode; public DateTime Seen; public int Reads; }
     static readonly object Gate=new object();
-    static readonly List<Entry> Entries=new List<Entry>();
+    static readonly List<Entry> Entries=Load();
+    static List<Entry> Load()
+    {
+        var rows=WorkspaceStore.Load("activity",()=>new List<Entry>());
+        foreach(var row in rows) {
+            string session=Session(row.Detail);object running;
+            bool unfinished=session!=null&&row.Detail.TryGetValue("running",out running)&&Convert.ToBoolean(running)&&!rows.Any(other=>other.Started>=row.Started&&Session(other.Detail)==session&&other.Detail.ContainsKey("running")&&!Convert.ToBoolean(other.Detail["running"]));
+            if(row.Status=="running"||unfinished){row.Status="failed";row.Error="PROCESS_RESTARTED: previous execution must be reconciled";row.Verified=false;if(row.Detail!=null){row.Detail["running"]=false;row.Detail["is_error"]=true;row.Detail["error"]=row.Error;}}
+        }
+        return rows;
+    }
     static readonly List<Viewer> Viewers=new List<Viewer>();
     public static bool Within(string target,string root) { return string.IsNullOrEmpty(root)||target.Equals(root,StringComparison.OrdinalIgnoreCase)||target.StartsWith(root.TrimEnd('/')+"/",StringComparison.OrdinalIgnoreCase); }
     public static string Begin(string tool,string target,string thread="unassigned",string trace="")
     {
-        lock(Gate){var e=new Entry{Id=Guid.NewGuid().ToString("N"),Tool=tool,ThreadId=thread,Trace=trace!=null&&trace.Length>200?trace.Substring(0,200):trace,Target=target,Status="running",Started=DateTime.UtcNow};Entries.Add(e);if(Entries.Count>100)Entries.RemoveAt(0);return e.Id;}
+        lock(Gate){var e=new Entry{Id=Guid.NewGuid().ToString("N"),Tool=tool,ThreadId=thread,Trace=trace!=null&&trace.Length>200?trace.Substring(0,200):trace,Target=target,Status="running",Started=DateTime.UtcNow};Entries.Add(e);if(Entries.Count>100)Entries.RemoveAt(0);WorkspaceStore.Save("activity",Entries);return e.Id;}
     }
-    public static void Finish(string id,bool failed,long elapsed,string error,string preview,Dictionary<string,object> detail=null)
+    public static void Finish(string id,bool failed,long elapsed,string error,string preview,Dictionary<string,object> detail=null,bool verified=false)
     {
-        lock(Gate){var e=Entries.Find(x=>x.Id==id);if(e==null)return;e.Status=failed?"failed":"returned";e.Elapsed=elapsed;e.Error=error;e.Preview=preview==null?null:preview.Substring(0,Math.Min(preview.Length,12000));e.Detail=detail;}
+        lock(Gate){var e=Entries.Find(x=>x.Id==id);if(e==null)return;e.Status=failed?"failed":"returned";e.Elapsed=elapsed;e.Error=error;e.Preview=preview==null?null:preview.Substring(0,Math.Min(preview.Length,12000));e.Detail=detail;e.Verified=verified;WorkspaceStore.Save("activity",Entries);}
     }
     // The local dashboard reads Detail and skips the larger raw receipt it never renders.
     public static object[] Read(string path,string thread="",bool receipts=true)
@@ -28,8 +38,9 @@ static class WorkspaceActivity
     public static Dictionary<string,object> TaskObservation(string path,string thread)
     {
         lock(Gate){var rows=Entries.Where(e=>e.ThreadId==thread&&Within(e.Target,path)&&!new[]{"update_plan","check_task_completion","get_workspace_status","read_workspace_activity","open_workspace"}.Contains(e.Tool)).ToArray();
-            var failed=rows.LastOrDefault(e=>e.Status=="failed");return new Dictionary<string,object>{{"running",rows.Any(e=>e.Status=="running")},{"last_at",rows.Length==0?DateTime.MinValue:rows.Max(e=>e.Started.AddMilliseconds(e.Elapsed))},{"failure",failed==null?"":failed.Tool+": "+failed.Error},{"failure_at",failed==null?DateTime.MinValue:failed.Started.AddMilliseconds(failed.Elapsed)}};}
+            var failed=rows.LastOrDefault(e=>e.Status=="failed");return new Dictionary<string,object>{{"running",rows.Any(e=>e.Status=="running")},{"last_at",rows.Length==0?DateTime.MinValue:rows.Max(e=>e.Started.AddMilliseconds(e.Elapsed))},{"failure",failed==null?"":failed.Tool+": "+failed.Error},{"failure_id",failed==null?"":failed.Id},{"failure_at",failed==null?DateTime.MinValue:failed.Started.AddMilliseconds(failed.Elapsed)}};}
     }
+    public static bool Evidence(string id,string path,string thread,DateTime after){lock(Gate)return Entries.Any(e=>e.Id==id&&e.ThreadId==thread&&Within(e.Target,path)&&e.Status=="returned"&&e.Verified&&e.Started>=after);}
     public static void Seen(string id,string path,string bridge,string mode)
     {
         if(string.IsNullOrEmpty(id))return;

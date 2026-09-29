@@ -7,7 +7,7 @@ const { launchDashboardBrowser } = require('../scripts/browser-launch.cjs');
 test('actual MCP image receipts, workspace details and local path actions', { timeout: 90000 }, async t => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'workspace-media-'));
   const exe = process.env.WORKSPACE_TEST_EXE || path.join(__dirname, '../dist-next/LocalWorkspace.exe');
-  const child = spawn(exe, ['--mcp'], { windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'] });
+  const child = spawn(exe, ['--mcp'], {windowsHide:true,stdio:['pipe','pipe','pipe'],env:{...process.env,WORKSPACE_STATE_DIR:path.join(root,'.state')}});
   const exited = new Promise(resolve => child.once('exit', resolve));
   let seq = 0, buffer = '', base = '', browser, originalWindows = null;
   const pending = new Map();
@@ -49,7 +49,7 @@ test('actual MCP image receipts, workspace details and local path actions', { ti
     const snapshot = await (await fetch(base + 'api/snapshot')).json();
     const detail = snapshot.activity.find(item => item.tool === 'get_workspace_status').detail;
     assert.equal(detail.kind, 'workspace');
-    assert.equal(detail.tools.length, 26);
+    assert.equal(detail.tools.length, 28);
     assert(detail.workspaces.some(item => item.path === root.replace(/\\/g, '/')));
     assert(detail.info.some(item => item.label === '面板地址' && item.value === base));
     assert(!JSON.stringify(snapshot).includes(receipt.content[1].data));
@@ -83,7 +83,7 @@ test('actual MCP image receipts, workspace details and local path actions', { ti
     await page.locator('#refresh').focus();
     assert.equal(await page.locator('#refresh').evaluate(el => getComputedStyle(el).outlineStyle), 'solid');
     await page.locator('#timeline .event').filter({ hasText: '工作区状态' }).click();
-    assert.match(await page.locator('#detail-body').innerText(), /26 个/);
+    assert.match(await page.locator('#detail-body').innerText(), /28 个/);
     assert.match(await page.locator('#detail-body').innerText(), /图片与工作区验收/);
     assert(await page.locator('#detail-body .path-link').count() >= 3);
     // An actual file gone missing must give useful feedback after a real browser POST.

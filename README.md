@@ -4,7 +4,7 @@
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-green" alt="MIT License"></a>
   <img src="https://img.shields.io/badge/platform-Windows%2010%2F11%20x64-blue" alt="Windows 10/11 x64">
   <img src="https://img.shields.io/badge/.NET%20Framework-4.8-orange" alt=".NET Framework 4.8">
-  <img src="https://img.shields.io/badge/version-2.2.1-brightgreen" alt="v2.2.1">
+  <img src="https://img.shields.io/badge/version-2.3.0-brightgreen" alt="v2.3.0">
 </p>
 
 <p align="center">
@@ -23,7 +23,22 @@
 
 ![补丁审阅视图](docs/images/dashboard-patch-review.png)
 
-版本历史按最新在前排列：[完整升级说明](UPGRADE-NOTES.md)。以下工具数和版本号对应各次发布；当前版本为 **2.2.1**，安装与核对步骤见下方“快速开始”。
+版本历史按最新在前排列：[完整升级说明](UPGRADE-NOTES.md)。以下工具数和版本号对应各次发布；当前版本为 **2.3.0**，安装与核对步骤见下方“快速开始”。
+
+## 2.3.0：可靠重试、文件恢复与持久任务记录
+
+- **可靠执行**：命令可携带稳定的 `request_id`，重复请求复用原会话；重启后不会误重跑。命令输出支持分页、末尾读取与丢失区间提示。
+- **可核对的修改**：读取文件返回 SHA256；写入与编辑支持版本校验和预览。精确匹配失败给出换行差异或附近行提示，不自动模糊替换。
+- **文件历史与撤销**：新增 `workspace_history`、`restore_change`，支持预览、撤销与重做；恢复前核对整组文件，拒绝覆盖外部修改。仅恢复直接文件工具记录，不声称撤销命令或远端副作用。
+- **任务记录可恢复**：对话、计划、近期活动和文件历史按 Windows 当前用户加密保存。完成证据可引用实际活动；失败须明确登记处理说明，单纯更新计划不会清除问题。命令进程与图片缓存不跨重启恢复。
+- **审阅基准**：可查看从打开工作区或上次审阅以来的 Git 变化；独立 index 与私有引用不改动正常暂存区和分支。
+- **系统凭据保存**：新版启动时将 API Key 迁入 Windows 凭据管理器，保存成功后移除旧配置中的明文值。
+
+当前识别值：`version: 2.3.0`、`tool_count: 28`。完整边界和参数见 [2.3.0 发行说明](docs/RELEASE-2.3.0.md) 与 [工具手册](docs/TOOLS.md)。历史恢复辅助最多保存 100 次直接文件操作 / 48 MiB 原始前后字节，不替代备份。
+
+![文件恢复记录与执行证据](docs/images/dashboard-reliability.png)
+
+截图使用隔离测试数据。磁盘程序已更新与运行中的旧进程已升级是两回事；完成当前任务后退出旧程序，再启动新版并刷新宿主工具元数据。
 
 ## 2.2.1：任务提示按需查看
 
@@ -44,7 +59,7 @@
 - 后续工具回执附带当前对话的任务提示。工具调用成功不再被当作整个任务已完成；静默移除未完成步骤会被拒绝，调整范围需说明原因。
 - 超过两分钟没有新操作且仍有未完成工作时显示“暂无新调用 · 待确认”。计划里的“进行中”不会单独制造运行转圈；只有观察到实际执行时才显示运行状态。
 
-**完成检查依据模型登记的证据和本地执行状态，并非独立验收。插件不能阻止 ChatGPT 结束回复，也不能强制开启下一轮。** 复制提示不会自动发送，不新增部署、删除或对外操作授权。计划和执行记录仍保存在当前进程内，重启后需从原对话重新登记。详见 [2.2.0 发行说明](docs/RELEASE-2.2.0.md)。
+**完成检查依据模型登记的证据和本地执行状态，并非独立验收。插件不能阻止 ChatGPT 结束回复，也不能强制开启下一轮。** 复制提示不会自动发送，不新增部署、删除或对外操作授权。2.2.x 的计划和执行记录保存在当前进程内；2.3.0 起新增本地持久化。详见 [2.2.0 发行说明](docs/RELEASE-2.2.0.md)。
 
 该次发布的识别值为 `version: 2.2.0`、`tool_count: 26`。多步骤任务使用 `update_plan` 记录完整目标，实际验证后补充 `evidence`，结束前调用 `check_task_completion`；返回 `can_finish: false` 时继续处理，或如实登记必要阻塞。
 
@@ -76,7 +91,7 @@
 
 ## 特性一览
 
-- **26 个本地工具**：文件读写、精确编辑、多文件补丁、搜索、命令执行与增量输出、Git 审阅、执行计划。
+- **28 个本地工具**：文件读写、精确编辑、多文件补丁、搜索、命令执行与增量输出、Git 审阅、执行计划。
 - **双时代 MCP 协议（v2.0）**：同一个 EXE 同时服务 2025-06-18 legacy 客户端（`initialize` 握手，ChatGPT Tunnel 现行方式，兼容握手与调用方式）与 [2026-07-28](https://modelcontextprotocol.io/specification/2026-07-28) modern 无状态客户端：`server/discover` 能力发现、每请求 `_meta` 版本协商、`resultType`、可缓存 `tools/list`（`ttlMs`/`cacheScope`）、MRTR 危险操作确认、官方 Tasks 扩展长任务句柄、OpenTelemetry trace 关联与工具图标。
 - **内嵌实时工作台**：桌面程序首个页签直接嵌入工作台页面（WebView2，随系统 Edge 附带；缺运行时自动回退浏览器），每秒同步，按对话隔离时间线，检查器按调用类型渲染（图片、工作区状态、diff、命令输出、读取正文、搜索命中）。
 - **一体化桌面外壳**：单行工具栏（启动/停止合一、在浏览器打开、更多菜单）+ 四个页签（实时工作台 / 操作记录 / 原始日志 / 连接配置）；操作记录与原始日志为自绘视图，按级别着色、等宽排版、尾随跟随。
@@ -114,7 +129,7 @@
 
 ### 3. 启动连接
 
-打开 `LocalWorkspace.exe`，在**连接配置**页签填入 Tunnel ID 与 API Key（未填或格式不对时点"启动连接"会自动跳到该页签并标红提示），回到工具栏点**启动连接**（连接后同一按钮变为**停止**）。配置保存在 `%LOCALAPPDATA%/LocalWorkspacePlugin/settings.json`——**不要提交或公开该文件**。
+打开 `LocalWorkspace.exe`，在**连接配置**页签填入 Tunnel ID 与 API Key（未填或格式不对时点"启动连接"会自动跳到该页签并标红提示），回到工具栏点**启动连接**（连接后同一按钮变为**停止**）。Tunnel ID 保存在 `%LOCALAPPDATA%/LocalWorkspacePlugin/settings.json`；API Key 保存在 Windows 凭据管理器，旧明文配置在新版启动时迁移。
 
 连接成功后自动切到**实时工作台**页签，内嵌页面每秒同步本机状态；"更多"菜单提供刷新工作台、清空/复制日志、复制工作台链接。
 
@@ -122,7 +137,7 @@
 
 ### 4. 在 ChatGPT 中刷新插件
 
-打开 ChatGPT 网页版"设置 → 连接器（Connectors）→ 本地工作区"，滚动到底部"信息"，点击**刷新**（这是开发者连接设置页；应用详情页只有"重新连接"时请进入设置页操作）。成功后操作列表应包含 26 个工具。
+打开 ChatGPT 网页版"设置 → 连接器（Connectors）→ 本地工作区"，滚动到底部"信息"，点击**刷新**（这是开发者连接设置页；应用详情页只有"重新连接"时请进入设置页操作）。成功后操作列表应包含 28 个工具。
 
 ### 5. 验证
 
@@ -130,7 +145,7 @@
 
 > 调用 get_workspace_status 确认连接
 
-应返回 `version: 2.2.1`、`tool_count: 26`、`protocol_versions`、实际程序路径和进程实例 ID。**原始日志**页签会依次出现 `initialize`、`tools/list` 与工具回执——仅"已连接"不能证明 ChatGPT 已刷新工具。
+应返回 `version: 2.3.0`、`tool_count: 28`、`protocol_versions`、实际程序路径和进程实例 ID。**原始日志**页签会依次出现 `initialize`、`tools/list` 与工具回执——仅"已连接"不能证明 ChatGPT 已刷新工具。
 
 ## 怎么用（调用方式）
 
@@ -162,7 +177,7 @@
 
 工具会返回本地线程 ID 和直达该线程的工作台链接，之后的调用在时间线中按对话隔离展示。想自定义名称就补一句标题；想绑定真实 ChatGPT 会话可让模型带上已知的 `chat_id`（相同 `chat_id` 复用同一线程）。
 
-> **归属边界**：`openai/session` 是匿名关联信号，不是 ChatGPT `/c/` 链接中的真实 ID，也不是身份认证。服务端在当前进程内按组织、用户和会话组合散列后关联；重启后需重新建立关联。既无宿主信号也无 `thread_id` 的调用进入“未归属”。
+> **归属边界**：`openai/session` 是匿名关联信号，不是 ChatGPT `/c/` 链接中的真实 ID，也不是身份认证。服务端在当前进程内按组织、用户和会话组合散列后关联；2.3.0 起关联加密保存，重启后可复用。既无宿主信号也无 `thread_id` 的调用进入“未归属”。
 
 ### 将聊天附件保存到本地
 
@@ -170,7 +185,7 @@
 
 宿主支持文件输入时，模型调用 `import_file`；目标目录必须已存在，目标文件必须不存在。下载使用 HTTPS，失败不会留下半个目标文件。保存后可继续调用 `read_file`、`read_image` 或其他工具处理。签名下载链接不写入本地日志或工作台回执；此能力取决于宿主是否提供附件参数。
 
-## 26 个工具
+## 28 个工具
 
 > 完整的输入参数、类型与返回字段见 [docs/TOOLS.md](docs/TOOLS.md)。下表只按用途归类。
 
@@ -187,6 +202,7 @@
 | 创建目录、写入与精确编辑 | `create_directory`、`write_file`、`edit_file` |
 | 执行命令、发送标准输入 | `exec_command`、`write_stdin` |
 | 命令列表、增量输出、只读快照、停止 | `list_commands`、`poll_command`、`read_command`、`stop_command` |
+| 文件历史与恢复 | `workspace_history`、`restore_change` |
 | 修改审阅 | `show_changes`、`git_status`、`git_diff` |
 
 `show_changes` 只包含本进程文件工具记录的修改；`git_status` / `git_diff` 可检查 shell 或其他编辑器产生的 Git 变更（Git diff 不含未跟踪文件正文）。
@@ -200,7 +216,7 @@
 - 默认"跟随最新"自动展开当前筛选范围内的最新调用；点击历史调用会固定详情。
 - 支持搜索、状态筛选、暂停/恢复（仅暂停观察，不终止任务）和复制登记指令；连接失败保留旧结果并提示过期。
 - 未传线程 ID 的调用进入"未归属"，不猜测归属；线程分组是可视化隔离，不是账号级授权隔离。
-- 活动保留全局最近 100 条、最多 200 个线程，属于当前 MCP 进程；服务重启后需重新登记。
+- 活动保留全局最近 100 条、最多 200 个线程；2.3.0 起与计划一起加密保存。旧命令未确认结束时，重启后明确提示核对，不自动重跑。
 - 桌面程序的**操作记录**页签是同一活动流的表格视图（时间 / 线程 / 操作 / 内容），**原始日志**页签保留隧道与 MCP 的完整原始输出，均按级别着色、支持尾随跟随与行复制。
 
 页面实现：静态资源在 `src/ui/`（React 组件与中文标签）、`src/dashboard.css`（Tailwind 4）、`src/dashboard.template.html`（模板）。`npm ci && npm run build:ui` 先用 Tailwind CLI 编译样式，再用 esbuild 打包组件，全部内联进单个 `src/dashboard.html`——没有 CDN、没有模块加载器、运行时不需要 Node。新构建优先读取程序同目录的 `dashboard.html`，缺失时回退嵌入页面。
@@ -245,7 +261,7 @@ node --test tests/dashboard-media.test.cjs   # 实际 MCP 图片、状态和本�
 
 ## 更新与替换
 
-`Apply-Update.ps1` 发现运行中的应用或隧道会拒绝覆盖，不会自动终止进程。先关闭应用（会结束其命令树），再运行更新脚本并从原 dist 启动。更新工具元数据后需在 ChatGPT 设置页刷新并**新开聊天**验证。
+`Apply-Update.ps1` 默认在程序运行时拒绝覆盖。显式加 `-StageWhileRunning` 可保留旧映像并准备下次启动的新版，不终止或重启进程；回滚备份会输出实际位置。先关闭应用（会结束其命令树），再运行更新脚本并从原 dist 启动。更新工具元数据后需在 ChatGPT 设置页刷新并**新开聊天**验证。
 
 ## 常见问题
 
@@ -266,8 +282,8 @@ node --test tests/dashboard-media.test.cjs   # 实际 MCP 图片、状态和本�
 - 工作台只监听 `127.0.0.1` 动态端口，不开放远程访问或任意命令执行接口。打开 Windows 位置需要同源 POST 和当前进程令牌；文件仅在资源管理器中定位，点击程序或脚本路径不会执行它。
 - 默认以当前 Windows 用户权限访问本地磁盘；工作目录**不是**操作系统沙箱，请在可信账号下使用。
 - **目前没有命令级 / 路径级护栏**：`exec_command` 会以当前用户权限执行模型下达的任意命令，没有白名单，破坏性命令（如 `rm -rf`）也不会弹确认框。文件类工具会拒绝越界路径、且工具从不自动 `commit` / `push`，但 **shell 不受限**。请把模型指向的目录范围收窄，并盯着实时工作台的时间线复核每一步。
-- `settings.json` 含 API Key，不要提交、截图或公开。
-- 服务与活动记录属于当前进程，重启后需重新连接与登记；桌面日志仅保存在当前窗口，退出即清空。
+- API Key 使用 Windows 凭据管理器；不要公开旧版配置、凭据或聊天附件链接。
+- 服务需要重新连接；对话、计划、近期活动和直接文件历史在本地加密保存。桌面原始日志、命令进程与图片预览仍仅属于当前运行。
 
 ## 协议兼容性
 
@@ -275,7 +291,7 @@ node --test tests/dashboard-media.test.cjs   # 实际 MCP 图片、状态和本�
 
 | 时代 | 触发方式 | 提供的能力 |
 | --- | --- | --- |
-| legacy（2025-06-18） | `initialize` 握手（ChatGPT Tunnel 现行方式） | 兼容原有握手：26 个工具、进度通知、结构化输出 |
+| legacy（2025-06-18） | `initialize` 握手（ChatGPT Tunnel 现行方式） | 兼容原有握手：28 个工具、进度通知、结构化输出 |
 | modern（[2026-07-28](https://modelcontextprotocol.io/specification/2026-07-28)） | 请求 `_meta` 携带 `io.modelcontextprotocol/protocolVersion` | 无状态每请求协商、`server/discover`、`resultType`、`tools/list` 缓存字段（`ttlMs`/`cacheScope: private`）、`serverInfo` 回执标识 |
 
 modern 时代按客户端声明的能力渐进启用：

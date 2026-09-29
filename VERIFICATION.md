@@ -1,5 +1,17 @@
 # 验证记录
 
+## 2.3.0 · 2026-09-30
+
+- 最终源码使用系统 .NET Framework 编译到 `dist-next/LocalWorkspace.exe`，通过 `Apply-Update.ps1 -StageWhileRunning` 放入 `dist/LocalWorkspace.exe`。两个文件均为 1,705,984 字节，SHA256 均为 `768A48B055660B6D5B121B29CDD4D693D13C57F70C4195C447E4B2940B4E0EA4`。
+- 设置 `WORKSPACE_TEST_EXE` 指向正式 dist EXE 后运行完整 `npm test`：23 项通过、0 失败。实际 MCP 返回 2.3.0、28 个工具；legacy、modern、MRTR、长任务、文件与补丁、图片、附件契约和诊断回归通过。
+- 新增验证：同请求不重复执行；参数冲突拒绝；进程重启后的旧请求不重跑；字符分页、末尾读取与缓冲缺口；文件哈希冲突、预览不写入、精确匹配失败；单文件与整组撤销的外部修改保护；真实重启后对话、计划、证据与文件历史恢复；未确认完成的命令标为需核对。
+- 实际 Git 仓库夹具验证工作区/上次审阅基准、非忽略的新文件与外部编辑；正常 index 原始字节与 HEAD 均未变化。验证 Windows 凭据读写使用独立随机目标和合成 key，结束后删除该测试凭据，没有读取用户密钥。
+- 实际 Chromium 验证任务详情、文件恢复记录、活动证据、预览和浅深色布局；窄屏标题不会竖排，页面无横向溢出。人工查看渲染并修复标题压缩问题。`docs/images/dashboard-reliability.png` 为隔离数据交付截图。
+- 所有测试 MCP 进程使用独立 `WORKSPACE_STATE_DIR`。测试子进程、浏览器和临时目录已清理；早期失败留下的 `workspace-reliability-fSkwNM` 目录也已删除并核验不存在。
+- 发布前后原桌面 PID 4376、Tunnel PID 1104、MCP PID 21076 保持不变，未重启连接。必要旧映像备份保留在 `dist/LocalWorkspace.running-20260930-004043.exe`，用于旧进程继续运行和回滚；不是新版本运行证据。退出旧程序后再启动正式 EXE，新后端与凭据迁移才生效。
+- 验证边界：认证 Tunnel 冒烟由开关关闭（该测试文件仍被 Node 汇总为通过），公网附件下载冒烟未启用。没有声称真实 ChatGPT 已刷新并加载 28 个工具。此前 2.2.x 进程中的内存计划无法由新版本追溯恢复。
+
+
 ## 2.0.2 · 2026-09-20
 
 - 最终源码已重新编译到 `dist/LocalWorkspace.exe`，并针对该 EXE 运行全量 `npm test`：17 项通过，0 失败。认证 Tunnel 冒烟仍按默认开关跳过，未重启或抢占现有 Tunnel。

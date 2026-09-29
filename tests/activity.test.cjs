@@ -2,7 +2,7 @@ const {spawn}=require('node:child_process');
 const fs=require('node:fs'),os=require('node:os'),path=require('node:path'),assert=require('node:assert/strict');
 const root=fs.mkdtempSync(path.join(os.tmpdir(),'workspace-activity-test-'));
 const other=root+'-other';fs.mkdirSync(other);
-const child=spawn(process.env.WORKSPACE_TEST_EXE||path.join(__dirname,'../dist-next/LocalWorkspace.exe'),['--mcp'],{windowsHide:true,stdio:['pipe','pipe','pipe']});
+const child=spawn(process.env.WORKSPACE_TEST_EXE||path.join(__dirname,'../dist-next/LocalWorkspace.exe'),['--mcp'],{windowsHide:true,stdio:['pipe','pipe','pipe'],env:{...process.env,WORKSPACE_STATE_DIR:path.join(root,'.state')}});
 let sequence=0,buffer='',log='';const pending=new Map();
 child.stderr.on('data',d=>log+=d);
 child.stdout.on('data',d=>{buffer+=d;let at;while((at=buffer.indexOf('\n'))>=0){const m=JSON.parse(buffer.slice(0,at));buffer=buffer.slice(at+1);const p=pending.get(m.id);if(p){clearTimeout(p.timer);pending.delete(m.id);p.resolve(m);}}});
@@ -10,7 +10,7 @@ function request(method,params={}){return new Promise((resolve,reject)=>{const i
 async function call(name,args={}){const r=await request('tools/call',{name,arguments:args});assert(!r.error,JSON.stringify(r));assert.equal(r.result.structuredContent.tool,name,'concurrent calls must retain their own tool identity');return r.result.structuredContent;}
 const delay=ms=>new Promise(r=>setTimeout(r,ms));
 async function main(){
- const init=await request('initialize');assert.equal(init.result.serverInfo.version,'2.2.1');
+ const init=await request('initialize');assert.equal(init.result.serverInfo.version,'2.3.0');
  const rendered=await call('read_workspace_activity',{path:root});assert.equal(rendered.result.activity.length,0);
  const started=Date.now();let done=false;
  const long=call('exec_command',{cwd:root,cmd:'printf first; sleep 3; printf last',yield_time_ms:5000}).then(r=>{done=true;return r;});

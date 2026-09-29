@@ -32,7 +32,7 @@ static class WorkspaceContracts
         p["path"]=str;p["error_code"]=str;p["message"]=str;
         string[] required=new string[0];
         if(new List<string>{"exec_command","read_command","poll_command","write_stdin","stop_command"}.Contains(tool)){
-            p["session_id"]=str;p["running"]=boolean;p["exit_code"]=Nullable("integer");p["output"]=str;p["full_output"]=str;p["output_mode"]=new{@enum=new[]{"delta","snapshot"}};p["elapsed_seconds"]=number;p["truncated"]=boolean;p["timed_out"]=boolean;p["stopped"]=boolean;required=new[]{"session_id","running","output","exit_code"};
+            p["session_id"]=str;p["running"]=boolean;p["exit_code"]=Nullable("integer");p["output"]=str;p["full_output"]=str;p["output_mode"]=new{@enum=new[]{"delta","snapshot","page"}};p["elapsed_seconds"]=number;p["truncated"]=boolean;p["timed_out"]=boolean;p["stopped"]=boolean;required=new[]{"session_id","running","output","exit_code"};
         }else if(tool=="read_file"){
             p["lines"]=ArrayOf(str);p["start_line"]=integer;p["returned_count"]=integer;p["next_line"]=Nullable("integer");required=new[]{"path","lines","returned_count","next_line"};
         }else if(tool=="read_image"||tool=="import_file"){
@@ -60,8 +60,10 @@ static class WorkspaceContracts
         }else if(tool=="create_directory"){p["created"]=boolean;p["exists"]=boolean;required=new[]{"path","created","exists"};}
         else if(tool=="file_info"){p["directory"]=boolean;p["size_bytes"]=Nullable("integer");required=new[]{"path","directory"};}
         else if(tool=="write_file"||tool=="edit_file"){p["diff"]=Type("object");p["created"]=boolean;required=new[]{"path","diff"};}
+        else if(tool=="workspace_history"){p["changes"]=ArrayOf(Type("object"));p["scope"]=str;required=new[]{"path","changes","scope"};}
+        else if(tool=="restore_change"){p["change_id"]=str;p["applied"]=boolean;p["action"]=str;p["files"]=ArrayOf(Type("object"));p["count"]=integer;required=new[]{"change_id","applied","action","files","count"};}
         else if(tool=="apply_patch"||tool=="show_changes"){p["files"]=ArrayOf(Type("object"));p["count"]=integer;p["partial"]=boolean;required=new[]{"files","count"};}
         var error=Shape(new Dictionary<string,object>{{"error_code",str},{"message",str}},"error_code","message");
-        return new{type="object",properties=new{tool=new{@enum=new[]{tool}},result=new{anyOf=new[]{Shape(p,required),error}},isError=boolean,thread_id=str,task=Nullable("object")},required=new[]{"tool","result","isError"},additionalProperties=false};
+        return new{type="object",properties=new{activity_id=str,tool=new{@enum=new[]{tool}},result=new{anyOf=new[]{Shape(p,required),error}},isError=boolean,thread_id=str,task=Nullable("object")},required=new[]{"tool","result","isError"},additionalProperties=false};
     }
 }

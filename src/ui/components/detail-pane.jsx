@@ -50,6 +50,8 @@ export function DetailPane({ row, now, snapshot, onCopy, copied }) {
             <>
               {detail && detail.is_error && detail.error ? <div className="alert"><span className="mark"><Icon name="alert" /></span><div>{detail.error}</div></div> : null}
               <DetailViews row={row} now={now} />
+              {detail?.change_id ? <details className="task-history"><summary>文件恢复记录</summary><p>记录 ID：{detail.change_id}</p><p>可在原对话中要求预览撤销此记录；应用前会核对文件是否已被其他操作修改。命令产生的外部效果不在恢复范围内。</p></details> : null}
+              {row?.id ? <details className="task-history"><summary>执行证据</summary><p>活动 ID：{row.id}</p>{detail?.before_sha256 ? <p className="break-all">修改前：{detail.before_sha256}<br />修改后：{detail.after_sha256}</p> : null}</details> : null}
               {!detail
                 ? <Empty title="这次调用没有结构化详情" hint={staleServer(snapshot)
                     ? '当前服务端是旧版本，没有返回文件、行号与命令输出。更新本地工作区插件并重启后，这里会显示每次调用实际做了什么。'

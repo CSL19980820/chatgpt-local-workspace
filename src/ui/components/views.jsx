@@ -84,18 +84,19 @@ export function DetailViews({ row, now }) {
 
   if (kind === 'write') {
     // A rejected write reports paths only: no operation, size or diff may be shown.
-    const rejected = detail.applied === false;
+    const rejected = detail.applied === false && !detail.is_preview;
     return (
       <>
         {(detail.files || []).map((file, index) => {
           const diff = file.diff || {};
           const rows = [{ label: '位置', value: file.path, mono: true }];
           if (file.previous_path) rows.push({ label: '移动自', value: file.previous_path, mono: true });
+          if (detail.is_preview) rows.push({ label: '结果', value: '预览，未修改文件' });
           if (rejected) rows.push({ label: '结果', value: '这次调用没有写入这个文件' });
           if (!rejected && file.size_bytes) rows.push({ label: '写入大小', value: bytes(file.size_bytes) });
           if (!rejected && MODE[file.operation]) rows.push({ label: '写入方式', value: MODE[file.operation] });
           return (
-            <Box key={index} badge={rejected ? '未写入' : OPERATIONS[file.operation] || '修改'} badgeClass={rejected ? 'failed' : file.operation}
+            <Box key={index} badge={detail.is_preview ? '预览' : rejected ? '未写入' : OPERATIONS[file.operation] || '修改'} badgeClass={rejected ? 'failed' : file.operation}
               className={index === 0 && !rejected ? 'fill' : ''}
               title={file.name || file.path} path={file.path} right={!rejected && (diff.added || diff.removed) ? <Counts added={diff.added || 0} removed={diff.removed || 0} /> : null}>
               <Rows rows={rows} />
