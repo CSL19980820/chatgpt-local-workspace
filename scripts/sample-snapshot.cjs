@@ -63,9 +63,9 @@ module.exports=function sampleSnapshot(){
     call('c15','exec_command','E:/workspace/local-workspace',0.4*minute,26400,{kind:'command',session_id:'two',command:'node scripts/dashboard-preview.cjs --sample',shell:'git_bash',shell_executable:'E:/Git/bin/bash.exe',cwd:'E:/workspace/local-workspace',output_tail:'Dashboard preview: http://127.0.0.1:43117\nwaiting for the first request…\n',output_chars:74,truncated:false,running:true,exit_code:null,timed_out:false,stopped:false,elapsed_seconds:26.4,output_mode:'delta',input:null,sent_chars:0,summary:'node scripts/dashboard-preview.cjs --sample'},{trace:'00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01'})
   ];
   activity.push(call('c18','read_image','E:/workspace/local-workspace/docs/images/dashboard-patch-review.png',1.5*minute,3,{kind:'image',name:'dashboard-patch-review.png',path:'E:/workspace/local-workspace/docs/images/dashboard-patch-review.png',mime_type:'image/png',size_bytes:125000,preview_url:'/sample-image',summary:'dashboard-patch-review.png'}));
-  activity.push(call('c19','get_workspace_status','',1.8*minute,5,{kind:'workspace',summary:'工作区状态 · v2.4.0',info:[{label:'版本',value:'2.4.0'},{label:'实例',value:'sample-instance',mono:true},{label:'程序',value:'E:/workspace/local-workspace/dist/LocalWorkspace.exe',mono:true},{label:'工具数',value:'23'},{label:'运行中命令',value:'1'},{label:'命令会话',value:'2 个'},{label:'面板地址',value:'http://127.0.0.1:43117/',mono:true},{label:'默认 Shell',value:'git_bash'},{label:'协议版本',value:'2025-06-18 (legacy initialize)\n2026-07-28 (modern stateless)'},{label:'可见范围',value:'当前 MCP 进程；其他连接、过去进程和模型思考不可见。'}],workspaces:[{title:'本地工作区面板改版',path:'E:/workspace/local-workspace'}],tools:['register_conversation','open_workspace','update_plan','check_task_completion','apply_patch','workspace_history','restore_change','get_workspace_status','read_command','write_stdin','git_status','git_diff','import_file','read_image','create_directory','list_directory','read_file','write_file','edit_file','exec_command','show_changes','search_files','search_text']}));
+  activity.push(call('c19','get_workspace_status','',1.8*minute,5,{kind:'workspace',summary:'工作区状态 · v2.4.1',info:[{label:'版本',value:'2.4.1'},{label:'实例',value:'sample-instance',mono:true},{label:'程序',value:'E:/workspace/local-workspace/dist/LocalWorkspace.exe',mono:true},{label:'工具数',value:'23'},{label:'运行中命令',value:'1'},{label:'命令会话',value:'2 个'},{label:'面板地址',value:'http://127.0.0.1:43117/',mono:true},{label:'默认 Shell',value:'git_bash'},{label:'协议版本',value:'2025-06-18 (legacy initialize)\n2026-07-28 (modern stateless)'},{label:'可见范围',value:'当前 MCP 进程；其他连接、过去进程和模型思考不可见。'}],workspaces:[{title:'本地工作区面板改版',path:'E:/workspace/local-workspace'}],tools:['register_conversation','open_workspace','update_plan','check_task_completion','apply_patch','workspace_history','restore_change','get_workspace_status','read_command','write_stdin','git_status','git_diff','import_file','read_image','create_directory','list_directory','read_file','write_file','edit_file','exec_command','show_changes','search_files','search_text']}));
   return finalize({
-    version:'2.4.0',
+    version:'2.4.1',
     instance_id:'sample',
     dashboard_url:'http://127.0.0.1:0/',
     conversations:[{thread_id:'thread-local-workspace',title:'本地工作区面板改版',path:'E:/workspace/local-workspace',chat_id:'',chat_url:null,created_at:iso(50*minute)}],
@@ -171,7 +171,7 @@ function richSnapshot(){
     row('thread-codex-paging','r5','apply_patch',root,19.9*minute,30,{kind:'write',session_id:null,count:1,omitted_files:0,error:'第 2 个文件写入失败：拒绝访问。已写入的文件保留，请检查后再继续。',partial:true,rollback:'not_attempted',root,summary:'第 2 个文件写入失败：拒绝访问。已写入的文件保留，请检查后再继续。',files:[file('src/WorkspaceTasks.cs','update',4,2,[diffRow('add',null,67,'        bool recoveryValid=(p.ResolvedIssue==issueId||SameFailure(...));')])],is_error:true},{turn_id:turnB,status:'failed',error_code:'PATCH_WRITE_FAILED'}),
     row('thread-codex-paging','r6','exec_command',root,19.5*minute,300000,{kind:'command',session_id:'c0de0002',command:'npm run test:slow',shell:'git_bash',shell_executable:'E:/Git/bin/bash.exe',cwd:root,output_tail:'waiting for fixture server…\n[timeout] command exceeded 300 s and its process tree was stopped\n',output_chars:96,truncated:false,running:false,exit_code:1,timed_out:true,stopped:false,elapsed_seconds:300,output_mode:'delta',input:null,sent_chars:0,summary:'npm run test:slow'},{turn_id:turnB,status:'failed',error_code:'TIMEOUT'}),
     // ChatGPT conversation: no turn_id; calls spaced so a ~30 s gap heuristic splits them in two groups.
-    row('thread-chatgpt-release','r7','get_workspace_status','',33*minute,6,{kind:'workspace',summary:'工作区状态 · v2.4.0',info:[{label:'版本',value:'2.4.0'},{label:'工具数',value:'23'}]},{trace:'00-0af7651916cd43dd8448eb211c80319c-b7ad6b7169203331-01'}),
+    row('thread-chatgpt-release','r7','get_workspace_status','',33*minute,6,{kind:'workspace',summary:'工作区状态 · v2.4.1',info:[{label:'版本',value:'2.4.1'},{label:'工具数',value:'23'}]},{trace:'00-0af7651916cd43dd8448eb211c80319c-b7ad6b7169203331-01'}),
     row('thread-chatgpt-release','r8','write_file',P('README.md'),32.8*minute,2,{kind:'write',session_id:null,count:1,overwrite:false,label:'替换文件',summary:'文件已经存在，需要 overwrite=true 才能覆盖。',files:[{path:P('README.md'),name:'README.md',operation:null,size_bytes:0,previous_path:null,added:0,removed:0,diff:null}],applied:false,is_error:true,error:'文件“'+P('README.md')+'”已经存在，需要 overwrite=true 才能覆盖。'},{status:'failed',error_code:'EXISTS',trace:'00-0af7651916cd43dd8448eb211c80319c-c1d2e3f4a5b6c7d8-01'}),
     row('thread-chatgpt-release','r9','write_file',P('docs/RELEASE-2.4.0.md'),32.6*minute,5,{kind:'write',session_id:null,count:1,overwrite:true,label:'替换文件',summary:'RELEASE-2.4.0.md · 替换文件 · +12 −4',files:[file('docs/RELEASE-2.4.0.md','replace',12,4,[diffRow('add',null,3,'2026-10-08。公开发行包含本地 2.3.1、2.3.2 的修复。')])]}),
     row('thread-chatgpt-release','r10','exec_command',root,14*minute,48000,{kind:'command',session_id:'c0de0003',command:'pwsh -File build.ps1',shell:'powershell',shell_executable:'C:/Program Files/PowerShell/7/pwsh.exe',cwd:root,output_tail:longOutput.slice(-4000),output_chars:longOutput.length,truncated:true,running:false,exit_code:0,timed_out:false,stopped:false,elapsed_seconds:48,output_mode:'delta',input:null,sent_chars:0,summary:'pwsh -File build.ps1'}),
@@ -184,7 +184,7 @@ function richSnapshot(){
   ];
   const command=(thread,session,cmd,shell,started,running,exit,elapsed,output,extra)=>Object.assign({thread_id:thread,started_at:iso(started),session_id:session,command:cmd,cwd:root,shell,running,exit_code:exit,elapsed_seconds:elapsed,output,truncated:false,timed_out:false,stopped:false},extra||{});
   return finalize({
-    version:'2.4.0',
+    version:'2.4.1',
     instance_id:'sample-rich',
     dashboard_url:'http://127.0.0.1:0/',
     conversations:[
@@ -220,9 +220,9 @@ function diagnosticsSample(){
     return {id,label,running,installed,restart_required:restart,status:restart?'restart_required':!installed?'missing':!running?'unknown_running':'ok',detail};
   };
   return {
-    version:'2.4.0',
+    version:'2.4.1',
     versions:[
-      component('mcp','本地 MCP','2.4.0','2.4.0','运行版本来自当前进程，文件版本来自当前磁盘程序。'),
+      component('mcp','本地 MCP','2.4.1','2.4.1','运行版本来自当前进程，文件版本来自当前磁盘程序。'),
       component('desktop','桌面程序','2.4.0','2.4.1','桌面启动时记录；独立 MCP 进程不关联桌面。'),
       component('tunnel','Tunnel Client','0.0.16','0.0.16','运行版本在启动时记录；文件已更新时需要下次启动生效。'),
       component('webview2_sdk','WebView2 SDK','1.0.4258.31','1.0.4258.31','随本地程序嵌入；加载器按 SDK 版本隔离缓存。'),

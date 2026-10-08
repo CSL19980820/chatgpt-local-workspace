@@ -71,7 +71,7 @@ class MainForm:Form
     Panel wbHost=new Panel(),wbEmpty=new Panel();UiButton emptyStart=new UiButton(),emptyBrowser=new UiButton();
     UiSelect threadFilter=new UiSelect();ActivityGrid grid=new ActivityGrid();LogView logView=new LogView();
     Label configHint=new Label(),filterHint=new Label(),emptyTitle=new Label(),emptySub=new Label(),emptyFail=new Label();
-    int lastMenuClose;
+    int lastMenuClose;LogLine foldLine;int foldCount;DateTime foldAt;
     readonly List<ActivityRow> activityRows=new List<ActivityRow>();readonly Dictionary<string,string> threadNames=new Dictionary<string,string>();
     readonly ConcurrentQueue<string> logQueue=new ConcurrentQueue<string>();System.Windows.Forms.Timer logTimer=new System.Windows.Forms.Timer();int queued,discarded;bool discardNoted;string healthUrl;bool checking;readonly bool preview;
     string dashboardUrl,webviewAt,contextText="允许目录：全部本地磁盘    ·    OpenAI Tunnel → 本机工具";
@@ -221,7 +221,7 @@ class MainForm:Form
     void ClearConfigError(){tunnelInput.Error=false;keyInput.Error=false;configHint.Text="配置仅保存在本机，不会上传";configHint.ForeColor=Theme.Faint;}
     void UpdateRunButton(){bool running=client!=null||busy;runToggle.Text=running?"停止":"启动连接";runToggle.Kind=running?UiButton.Variant.Secondary:UiButton.Variant.Primary;}
     void Log(string text){if(IsDisposed)return;if(cfg.Key.Length>0)text=text.Replace(cfg.Key,"[key]");if(Interlocked.Increment(ref queued)>5000){Interlocked.Decrement(ref queued);Interlocked.Increment(ref discarded);return;}logQueue.Enqueue(text);}
-    void FlushLogs(){string line;bool any=false;for(int i=0;i<300&&logQueue.TryDequeue(out line);i++){Interlocked.Decrement(ref queued);string time=DateTime.Now.ToString("HH:mm:ss");any=true;string readable=line;if(line.StartsWith("[Dashboard] ")){Uri url;if(Uri.TryCreate(line.Substring(12).Trim(),UriKind.Absolute,out url)&&url.Scheme=="http"&&url.Host=="127.0.0.1"){SetDashboardUrl(url.AbsoluteUri);}}try{if(line.StartsWith("{")){var obj=json.Deserialize<Dictionary<string,object>>(line);object msg;if(obj.TryGetValue("msg",out msg))readable=Convert.ToString(msg);}}catch{}
+    void FlushLogs(){string line;bool any=false;for(int i=0;i<300&&logQueue.TryDequeue(out line);i++){Interlocked.Decrement(ref queued);string time=DateTime.Now.ToString("HH:mm:ss");any=true;if(TunnelLogFold.IsStartupNoise(line)){FoldNoise(time);continue;}string readable=line;if(line.StartsWith("[Dashboard] ")){Uri url;if(Uri.TryCreate(line.Substring(12).Trim(),UriKind.Absolute,out url)&&url.Scheme=="http"&&url.Host=="127.0.0.1"){SetDashboardUrl(url.AbsoluteUri);}}try{if(line.StartsWith("{")){var obj=json.Deserialize<Dictionary<string,object>>(line);object msg;if(obj.TryGetValue("msg",out msg))readable=Convert.ToString(msg);}}catch{}
         var ll=new LogLine{Time=time,Raw=line,Fore=Theme.Text};
         if(line.IndexOf("[Workspace]",StringComparison.Ordinal)>=0){ll.Chip="工具";ll.ChipFore=Theme.Primary;ll.ChipBack=Theme.PrimarySoft;}
         else{string level=null;var lm=Regex.Match(line,"\"level\"\\s*:\\s*\"(error|warn|warning|info|debug)\"");if(lm.Success)level=lm.Groups[1].Value;else if(line.IndexOf("ERROR",StringComparison.Ordinal)>=0)level="error";else if(line.IndexOf("WARN",StringComparison.Ordinal)>=0)level="warn";
@@ -234,6 +234,9 @@ class MainForm:Form
         if(any){RefreshActivity();tabs.SetCount(1,activityRows.Count>0?activityRows.Count.ToString():"");tabs.SetCount(2,logView.Count>0?logView.Count.ToString():"");}
         if(discarded>0&&!discardNoted){discardNoted=true;Log("日志过快，已丢弃 "+discarded+" 条缓冲记录；原始日志有容量限制");}
     }
+    // tunnel-client 0.0.16 prints every fx dependency-injection step at INFO (~240 lines per start).
+    // Fold them into one summary row per burst; WARN/ERROR and the useful INFO lines stay untouched.
+    void FoldNoise(string time){DateTime now=DateTime.UtcNow;if(foldLine==null||!TunnelLogFold.SameBurst(foldAt,now)){foldCount=0;foldLine=new LogLine{Time=time,Chip="折叠",ChipFore=Theme.Muted,ChipBack=Theme.NeutralSoft,Fore=Theme.Faint};foldLine.Raw=TunnelLogFold.Summary(1);logView.Append(foldLine);}foldCount++;foldAt=now;foldLine.Raw=TunnelLogFold.Summary(foldCount);logView.NoteWidth(90+foldLine.Raw.Length*7);logView.Invalidate();}
     void RefreshActivity(){string selected=Convert.ToString(threadFilter.SelectedItem);var list=new List<ActivityRow>();foreach(var row in activityRows)if(selected=="全部对话"||selected==null||row.ThreadLabel==selected)list.Add(row);grid.SetRows(list);}
     async Task ClearLogs()
     {
@@ -246,7 +249,7 @@ class MainForm:Form
         });
         ClearDisplayLogs();if(host!=null)host.Reload();
     }
-    void ClearDisplayLogs(){string line;while(logQueue.TryDequeue(out line))Interlocked.Decrement(ref queued);Interlocked.Exchange(ref discarded,0);discardNoted=false;logView.Clear();grid.Clear();activityRows.Clear();RefreshActivity();tabs.SetCount(1,"");tabs.SetCount(2,"");}
+    void ClearDisplayLogs(){string line;while(logQueue.TryDequeue(out line))Interlocked.Decrement(ref queued);Interlocked.Exchange(ref discarded,0);discardNoted=false;foldLine=null;logView.Clear();grid.Clear();activityRows.Clear();RefreshActivity();tabs.SetCount(1,"");tabs.SetCount(2,"");}
     void SetDashboardUrl(string url){if(dashboardUrl==url)return;dashboardUrl=url;tabs.Select(0);SyncWorkbench();}
     void SyncWorkbench()
     {
@@ -342,7 +345,7 @@ class MainForm:Form
             pi.EnvironmentVariables["WORKSPACE_DESKTOP_VERSION"]=WorkspaceServer.Version;pi.EnvironmentVariables["WORKSPACE_TUNNEL_VERSION"]=WorkspaceDiagnostics.TunnelVersion(exe);
             pi.EnvironmentVariables["MCP_FORWARD_TRACE_CONTEXT"]="true";
             foreach(string name in new[]{"MCP_SERVER_URL","TUNNEL_CLIENT_CONFIG","TUNNEL_CLIENT_PROFILE","TUNNEL_CLIENT_PROFILE_FILE","CLOUDFLARED_MANAGED","CLOUDFLARED_TUNNEL_TOKEN"})pi.EnvironmentVariables.Remove(name);
-            client=new Process{StartInfo=pi};client.OutputDataReceived+=(s,e)=>{if(e.Data!=null)Log(e.Data);};client.ErrorDataReceived+=(s,e)=>{if(e.Data!=null)Log(e.Data);};client.Start();if(!AssignProcessToJobObject(job,client.Handle)){client.Kill();throw new Exception("无法管理隧道进程。");}client.BeginOutputReadLine();client.BeginErrorReadLine();statusPill.Value=UiStatusPill.State.Connecting;Log("启动本地工作区工具和 OpenAI Tunnel。");
+            foldLine=null;client=new Process{StartInfo=pi};client.OutputDataReceived+=(s,e)=>{if(e.Data!=null)Log(e.Data);};client.ErrorDataReceived+=(s,e)=>{if(e.Data!=null)Log(e.Data);};client.Start();if(!AssignProcessToJobObject(job,client.Handle)){client.Kill();throw new Exception("无法管理隧道进程。");}client.BeginOutputReadLine();client.BeginErrorReadLine();statusPill.Value=UiStatusPill.State.Connecting;Log("启动本地工作区工具和 OpenAI Tunnel。");
             for(int i=0;;i++){ct.ThrowIfCancellationRequested();if(client.HasExited)throw new Exception("Tunnel 启动失败。");if(File.Exists(health)){string url=File.ReadAllText(health).Trim();healthUrl=url;SetContext("允许目录：全部本地磁盘    ·    状态页："+url+"/ui");if(await Probe(url+"/readyz"))break;}if(i>90)throw new Exception("连接超时，请查看日志。");await Task.Delay(500,ct);}
             statusPill.Value=UiStatusPill.State.Live;Log("本地工具 "+WorkspaceServer.Version+" 就绪，共 "+WorkspaceServer.ToolCount+" 个工具。隧道就绪不代表 ChatGPT 已刷新工具；在网页版 设置 → 插件 → 本地工作区 → 信息 中刷新后，调用 get_workspace_status 核对版本。查看 initialize、tools/list 和工具调用日志确认实际连接。");
         }catch(OperationCanceledException){StopRun();}catch(Exception ex){Log(ex.Message);StopRun();}finally{busy=false;save.Enabled=client==null;tunnelInput.ReadOnly=keyInput.ReadOnly=client!=null;UpdateRunButton();SyncWorkbench();if(closing)Close();}
@@ -361,4 +364,26 @@ class MainForm:Form
         bool created;using(var activate=new EventWaitHandle(false,EventResetMode.AutoReset,"Local\\LocalWorkspacePlugin.Activate"))using(var mutex=new Mutex(true,"Local\\LocalWorkspacePlugin",out created)){if(!created){activate.Set();return;}Application.EnableVisualStyles();Application.SetCompatibleTextRenderingDefault(false);
         try{var f=new MainForm();var activationTimer=new System.Windows.Forms.Timer{Interval=200};activationTimer.Tick+=(s,e)=>{if(activate.WaitOne(0)){f.Show();if(f.WindowState==FormWindowState.Minimized)f.WindowState=FormWindowState.Normal;f.Activate();}};activationTimer.Start();f.FormClosed+=(s,e)=>activationTimer.Dispose();if(args.Length>0&&args[0]=="--start")f.Shown+=async(s,e)=>await f.StartRun();if(args.Length>1&&args[0]=="--smoke"){f.Shown+=async(s,e)=>{await f.StartRun();f.Log("SMOKE running="+(f.client!=null));using(var bmp=new Bitmap(f.Width,f.Height)){f.DrawToBitmap(bmp,new Rectangle(0,0,f.Width,f.Height));bmp.Save(args[1]+".png");}f.StopRun();f.Log("SMOKE stopped="+(f.client==null)+" sessionClean="+(f.session==null));File.WriteAllText(args[1],f.logView.Text);f.Close();};}Application.Run(f);}catch(Exception ex){if(args.Length>1){File.WriteAllText(args[1]+".error",ex.ToString());Environment.ExitCode=1;}else MessageBox.Show(ex.Message,"本地工作区");}}
     }
+}
+// Pure, testable classification for the 原始日志 fold (tests/log-fold.test.cjs drives it via reflection).
+static class TunnelLogFold
+{
+    // Exact fx event messages (go.uber.org/fx fxevent logger) observed in real tunnel-client 0.0.16
+    // `--log.format json --log.level info` output, plus the fx success events of the same family.
+    // Failure events (OnStart hook failed, start failed, invoke failed, ...) are deliberately absent.
+    internal static readonly HashSet<string> Events=new HashSet<string>(StringComparer.Ordinal){
+        "provided","replaced","decorated","supplied","invoking","run",
+        "OnStart hook executing","OnStart hook executed","OnStop hook executing","OnStop hook executed",
+        "initialized custom fxevent.Logger","started"};
+    internal const int BurstSeconds=10;
+    static readonly Regex Level=new Regex("\"level\"\\s*:\\s*\"([A-Za-z]+)\"",RegexOptions.CultureInvariant);
+    static readonly Regex Msg=new Regex("\"msg\"\\s*:\\s*\"((?:[^\"\\\\]|\\\\.)*)\"",RegexOptions.CultureInvariant);
+    internal static bool IsStartupNoise(string line)
+    {
+        if(line==null||!line.StartsWith("{",StringComparison.Ordinal)||line.IndexOf("[Workspace]",StringComparison.Ordinal)>=0)return false;
+        var level=Level.Match(line);if(!level.Success||!string.Equals(level.Groups[1].Value,"info",StringComparison.OrdinalIgnoreCase))return false;
+        var msg=Msg.Match(line);return msg.Success&&Events.Contains(msg.Groups[1].Value);
+    }
+    internal static bool SameBurst(DateTime last,DateTime now){double gap=(now-last).TotalSeconds;return gap>=0&&gap<=BurstSeconds;}
+    internal static string Summary(int count){return "已折叠 "+count+" 条 Tunnel 启动内部日志（fx 依赖注入 INFO；WARN/ERROR 不折叠，完整日志见 Tunnel 状态页 /ui）";}
 }

@@ -4,7 +4,7 @@
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-green" alt="MIT License"></a>
   <img src="https://img.shields.io/badge/platform-Windows%2010%2F11%20x64-blue" alt="Windows 10/11 x64">
   <img src="https://img.shields.io/badge/.NET%20Framework-4.8-orange" alt=".NET Framework 4.8">
-  <img src="https://img.shields.io/badge/version-2.4.0-brightgreen" alt="v2.4.0">
+  <img src="https://img.shields.io/badge/version-2.4.1-brightgreen" alt="v2.4.1">
 </p>
 
 <p align="center">
@@ -21,16 +21,23 @@ Let ChatGPT work directly on your machine through the **official OpenAI tunnel**
 | --- | --- |
 | ![Desktop app](docs/images/desktop-app.png) | ![Live workbench](docs/images/dashboard-timeline.png) |
 
-Current version **2.4.0** (2026-10-08; previous public release 2.3.0). See the [upgrade notes](UPGRADE-NOTES.md) for every release, the [2.4.0 release notes](docs/RELEASE-2.4.0.md) for migration details and upstream limits, and the [verification record](VERIFICATION.md) for test results. The upgrade and verification notes are written in Chinese.
+Current version **2.4.1** (2026-10-09; previous public release 2.4.0). See the [upgrade notes](UPGRADE-NOTES.md) for every release, the [2.4.0 release notes](docs/RELEASE-2.4.0.md) for migration details and upstream limits, and the [verification record](VERIFICATION.md) for test results. The upgrade and verification notes are written in Chinese.
 
 ## Contents
 
-- [What changed in 2.4.0](#what-changed-in-240)
+- [What changed in 2.4.1](#what-changed-in-241) · [What changed in 2.4.0](#what-changed-in-240)
 - [Features](#features) · [Requirements](#requirements) · [Quick start](#quick-start) · [Usage](#usage)
 - [The 23 tools](#the-23-tools) (including the [2.4.0 tool mapping](#240-tool-mapping) and [Recommended Codex configuration](#recommended-codex-configuration))
 - [Live workbench](#live-workbench) · [Desktop app](#desktop-app)
 - [Command execution details](#command-execution-details) · [Process visibility](#process-visibility) · [Release history](#release-history)
 - [Build from source](#build-from-source) · [Updating](#updating) · [Troubleshooting](#troubleshooting) · [Security notes](#security-notes) · [Protocol compatibility](#protocol-compatibility)
+
+## What changed in 2.4.1
+
+- **Tunnel startup noise folded in the raw log.** With `--log.level info`, Tunnel Client 0.0.16 logs every fx dependency-injection step at INFO (about 240 lines per start), burying the useful lines. The desktop **raw log** tab now collapses them into one row, "已折叠 N 条 Tunnel 启动内部日志" (N Tunnel startup internal lines folded), one row per start. Only exact event names are folded (`provided`, `replaced`, `decorated`, `supplied`, `invoking`, `run`, `OnStart/OnStop hook executing/executed`, `initialized custom fxevent.Logger`, `started`), and only at INFO; WARN / ERROR, the health URL, startup summary, MCP route and control-plane poller start/stop still show. See [Desktop app](#desktop-app).
+- Tools, interfaces, data formats and the Tunnel Client version are unchanged; upgrading from 2.4.0 only means replacing the files.
+
+Download the [v2.4.1 Windows x64 release](https://github.com/CSL19980820/chatgpt-local-workspace/releases/tag/v2.4.1).
 
 ## What changed in 2.4.0
 
@@ -103,7 +110,7 @@ In a new chat, say:
 
 > Call get_workspace_status to confirm the connection
 
-It should return `version: 2.4.0`, `tool_count: 23`, `protocol_versions`, the actual executable path and this process's instance ID. The **raw log** tab shows `initialize`, `tools/list` and tool receipts in order; "connected" alone does not prove ChatGPT refreshed the tools. Tunnel 0.0.16 requires `initialize` and `notifications/initialized` before legacy tool calls; modern requests carry their full negotiation metadata.
+It should return `version: 2.4.1`, `tool_count: 23`, `protocol_versions`, the actual executable path and this process's instance ID. The **raw log** tab shows `initialize`, `tools/list` and tool receipts in order; "connected" alone does not prove ChatGPT refreshed the tools. Tunnel 0.0.16 requires `initialize` and `notifications/initialized` before legacy tool calls; modern requests carry their full negotiation metadata.
 
 ## Usage
 
@@ -228,7 +235,7 @@ Three panes: **conversations | timeline | inspector**. Narrow windows collapse s
 - Then **All conversations** and the "Conversations N" group, whose **+** generates a registration prompt. While a call is running, All conversations shows a spinner; otherwise it shows the total call count.
 - Each conversation takes two lines: the title, then "source · N minutes ago". On the right, a spinner while a call runs, otherwise a red failure count. The current conversation is highlighted.
 - With no registered conversations it says that calls will be grouped once you register one with **+**.
-- The footer always shows **Unassigned** and **Connection diagnostics**; the current version (e.g. `v2.4.0`) appears in small gray text at the right of the diagnostics row. A collapsed sidebar or icon rail shows icons only.
+- The footer always shows **Unassigned** and **Connection diagnostics**; the current version (e.g. `v2.4.1`) appears in small gray text at the right of the diagnostics row. A collapsed sidebar or icon rail shows icons only.
 
 ### Header and conversation stats
 
@@ -396,7 +403,7 @@ Preview and observing old instances (never restarts the app or runs tools):
 - **Four tabs**:
   - **Live workbench**: the embedded workbench page; shows a Start button while disconnected.
   - **Operation log**: a table view of the same activity stream (time / thread / operation / content), filterable by conversation; double-click a row or press Ctrl+C to copy.
-  - **Raw log**: the complete tunnel and MCP output, colored by level, with tail-follow.
+  - **Raw log**: the tunnel and MCP output, colored by level, with tail-follow. From 2.4.1, the Tunnel Client's INFO-level fx dependency-injection lines at startup (`provided`, `run`, `invoking`, `supplied`, `OnStart/OnStop hook executing/executed` and so on, about 240 per start with 0.0.16) collapse into one row, "已折叠 N 条 Tunnel 启动内部日志" (N Tunnel startup internal lines folded), one row per start. WARN / ERROR lines always show, and useful INFO such as the health URL, startup summary, MCP route and control-plane poller start/stop stays visible. The full output is on the Tunnel status page `/ui`; "Copy raw log" copies the folded view.
   - **Connection settings**: Tunnel ID and API Key, stored only on this machine.
 - **More menu**: refresh workbench, diagnose connection, clear completed logs, copy raw log, copy workbench link. Call logs, conversation lists and plans are cleared when the app exits.
 - **WebView2**: without the runtime, the live workbench tab explains why and offers Open in browser; tools are unaffected.
@@ -428,6 +435,7 @@ See the [upgrade notes](UPGRADE-NOTES.md) for details; below are the highlights 
 
 | Version | Date | Highlights | Tools |
 | --- | --- | --- | --- |
+| [2.4.1](UPGRADE-NOTES.md#241--2026-10-09--折叠-tunnel-启动日志) | 2026-10-09 | Raw log folds the Tunnel's fx INFO startup lines | 23 |
 | [2.4.0](docs/RELEASE-2.4.0.md) | 2026-10-08 | Tool consolidation, workbench redesign, conversation source and stats, actual deletion of old records, manual clearing, component updates, zoom | 23 |
 | [2.3.0](docs/RELEASE-2.3.0.md) | 2026-09-30 | Command retry keys and output paging, file version guards and previews, file history and undo, private Git review baselines, credentials moved to Windows Credential Manager | 28 |
 | [2.2.1](docs/RELEASE-2.2.1.md) | 2026-09-21 | Task reminders replaced by a Task details button that opens on click | 26 |

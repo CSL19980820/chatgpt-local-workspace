@@ -36,7 +36,7 @@ test('shipped WebView2 assemblies render the real empty dashboard and desktop cl
     assert(report.desktop_log_counters_cleared && report.embedded_dashboard_loaded); assert.equal(report.sdk,'1.0.4258.31'); assert(report.runtime);
     console.log('Native WebView2 evidence: ' + JSON.stringify(report));
     if (process.env.WORKSPACE_CAPTURE_NATIVE === '1') {
-      fs.mkdirSync(path.join(repo,'work'),{recursive:true});for(const suffix of ['png','json']) fs.copyFileSync(evidence+'.'+suffix,path.join(repo,'work/native-workbench-2.4.0.'+suffix));
+      fs.mkdirSync(path.join(repo,'work'),{recursive:true});for(const suffix of ['png','json']) fs.copyFileSync(evidence+'.'+suffix,path.join(repo,'work/native-workbench-2.4.1.'+suffix));
     }
   } finally {
     if(driver && driver.exitCode === null) {try{execFileSync('taskkill.exe',['/PID',String(driver.pid),'/T','/F'],{windowsHide:true,stdio:'ignore'});}catch{}}

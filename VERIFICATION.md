@@ -2,6 +2,63 @@
 
 按时间倒序排列，最新在前。各节只记录当时实际执行的验证，不代表当前运行状态。时间均为本机时间（UTC+8）。
 
+## 2.4.1 正式发行 · 2026-10-09
+
+只改桌面“原始日志”的显示：折叠 Tunnel Client 启动时 INFO 级别的 fx 依赖注入日志。前端、图标、工具、接口和 Tunnel Client 版本都没有变化。源码与提交、标签 `v2.4.1` 一致。
+
+### 改动
+
+- `src/Program.cs` 新增 `TunnelLogFold`：只有 JSON 行、`level` 为 INFO、`msg` 与名单**完全相同**时才算启动噪声。名单 12 项：`provided`、`replaced`、`decorated`、`supplied`、`invoking`、`run`、`OnStart hook executing`、`OnStart hook executed`、`OnStop hook executing`、`OnStop hook executed`、`initialized custom fxevent.Logger`、`started`。
+- `FlushLogs` 遇到这类行不再逐行追加，改为在第一条的位置放一行“已折叠 N 条 Tunnel 启动内部日志（fx 依赖注入 INFO；WARN/ERROR 不折叠，完整日志见 Tunnel 状态页 /ui）”，之后原地更新 N。每次启动连接、清空日志，或与上一条折叠行间隔超过 10 秒时另起一行。
+- 版本号改为 2.4.1（`WorkspaceServer.Version`、测试、预览样例）。写法保持 C# 5（.NET Framework 自带 csc）。
+
+### 名单核对（真实 0.0.16 输出）
+
+- 用 `dist-next/tunnel-client.exe`（0.0.16）以 `--log.format json --log.level info` 启动：假 Key、假 Tunnel ID、控制面指向 `127.0.0.1:9`，`MCP_COMMAND` 是一个约 3 秒后退出的假脚本。没有读取或使用真实 API Key，结束时只结束这个探测进程。
+- 两次探测各 253、254 行。fx 事件及条数：`provided` 71、`run` 69、`invoking` 18、`OnStop hook executing` 14、`OnStop hook executed` 14、`OnStart hook executing` 13、`OnStart hook executed` 13、`supplied` 10、`initialized custom fxevent.Logger` 1。这 9 个都在名单里。
+- 没有出现 `replaced`、`decorated`、`started`。它们是 fx 同一组的成功事件，按原样列入名单。`running` 不是 fx 事件，也没有出现，没有列入。
+- 其余 INFO（`🩺 HEALTH URL`、`🌐 WEB UI`、`tunnel-client startup summary`、`mcp channel route resolved`、`starting/stopping control-plane poller`、`poller started/stopped`、`stdio MCP command started/exited`、`🟢 tunnel-client started` 等）和全部 WARN 都不在名单里，照常显示。
+
+### 折叠前后对比
+
+用预览模式的主窗体（不启动隧道，不读写 `settings.json`，窗口不显示）把上面第二次探测的 254 行送进真实的 `Log` / `FlushLogs`，再读取原始日志的行数。`[Dashboard]` 一行不送入，因为它会创建内嵌 WebView2。
+
+| | 2.4.0（`dist/LocalWorkspace.exe` 的副本） | 2.4.1（`dist-next`） |
+| --- | --- | --- |
+| 整段（启动 + 约 3 秒后假 MCP 退出引起的停止） | 253 行 | 31 行（30 行原样 + 1 行“已折叠 223 条”） |
+| 启动到 `🟢 tunnel-client started` | 215 行 | 21 行（20 行原样 + 1 行折叠） |
+
+停止阶段的 OnStop 日志与启动相隔约 3 秒，在 10 秒内，所以并入同一行折叠计数。
+
+### 产物
+
+- `scripts/Get-RuntimeComponents.ps1`：Tunnel Client 0.0.16、WebView2 SDK 1.0.4258.31，校验通过。
+- `npm run build:ui`：`src/dashboard.html` 521,878 字节，SHA256 `1EF21B3E28235EC8772A24E91217146B2C5BCCAFEAB5C935FC4DAEB8F71BD6C8`，与 2.4.0 相同。
+- `build.ps1` 输出 `dist-next/LocalWorkspace.exe`（00:17:39）：1,972,736 字节，文件版本 2.4.1.0，SHA256 `03ECC3F4C6EF637DB8CCE3886DD666FCB2DF3939F71ECF8F341934DC54026B12`。
+- `tunnel-client.exe` 与 `runtime-components.json` 与 2.4.0 相同（Tunnel SHA256 `4226BB74A72388147882881F29F79801B95E285D731A138071812E3AA6766571`）。
+
+### 自动化测试
+
+- 新增 `tests/log-fold.test.cjs`：用 .NET Framework csc 编译 `tests/fixtures/LogFoldProbe.cs`，通过反射调用 EXE 中的 `TunnelLogFold` 和预览主窗体。样例 `tests/fixtures/tunnel-0.0.16-startup-sample.jsonl` 取自上面的真实 0.0.16 输出，每种 `msg` 一行，去掉了用户路径和实例 ID，另加几行人工构造的失败事件和边界行（ERROR `OnStart hook failed`、ERROR `start failed`、WARN `run`、DEBUG `provided`、INFO `running`、带 `[Workspace]` 的 INFO `provided`）。
+  - 断言：只有名单内的 INFO 行被折叠，WARN / ERROR 和有用的 INFO 一律保留；名单与预期完全一致。
+  - 原始日志里每条保留的行都在，折叠行只有一行，位置在第一条被折叠的行处；10 秒内再来一批仍更新同一行；清空后重新计数。
+- `npm test` 第一次（00:17:45 开始，未设置 `WORKSPACE_TEST_EXE`，测试对象为 `dist-next`）：37 项，通过 35，失败 2。失败的是 `dashboard-ui` 的“时间线按时间正序排列”及其所在的 `dashboard` 组：该用例把样例里的 `HH:MM:SS` 文本直接排序，样例调用分布在当前时间之前约 46 分钟内，跨过零点时 23:xx 排到了 00:xx 后面。与本次改动无关，测试本身没有修改。
+- 第二次（00:47:25 开始，用时 20 秒，样例不再跨零点）：37 项，通过 37，失败 0，跳过 0。`diagnostics doctor` 实际运行并通过。
+- 认证 Tunnel 冒烟（`WORKSPACE_TUNNEL_SMOKE`）和公网附件冒烟未启用。
+- 测试前后，用户 `settings.json` 的 SHA256 一致。
+
+### 发行包
+
+- `scripts/package-release.ps1` 生成 `work/release/local-workspace-2.4.1-windows-x64.zip`：11,000,321 字节，SHA256 `323ee295e4c32d6f5fafe55f657408976c0e635fd93d56c2dd9047662bb84b79`。包外 `SHA256SUMS.txt` 记录同一哈希。
+- 解压核对：共 37 个文件，包内 `SHA256SUMS.txt` 列出的 36 个文件哈希全部一致。包内 `LocalWorkspace.exe` 与上面 `dist-next` 的 EXE 字节相同，文件版本 2.4.1.0。
+- 设置 `WORKSPACE_TEST_EXE` 指向解压后的 EXE，运行完整 `npm test`（00:48:26 开始，用时 20 秒）：37 项，通过 37，失败 0。`task-completion` 的计时问题这次没有出现。
+- 包内这份 VERIFICATION.md 是打包时的版本，本小节上面这几条是打包后补记的，其余内容与仓库一致（压缩包不能包含自身的哈希）。
+
+### 验证边界
+
+- 没有在真实 ChatGPT 会话中启动隧道并查看折叠效果；折叠效果只用假 Key 的探测输出和预览主窗体验证。
+- 桌面程序运行时没有截图。
+
 ## 2.4.0 正式发行 · 2026-10-08
 
 正式发行构建，源码与提交、标签 `v2.4.0` 一致。相对候选构建 4，前端、图标和后端源码都没有改动，只改了两处：

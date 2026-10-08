@@ -182,7 +182,7 @@ test('clear completed logs preserves running output, task evidence, failure clos
     assert.equal((await fetch(app.base + 'api/clear-logs', {method: 'POST', headers: {Origin: 'https://example.com', 'X-Workspace-Token': token}})).status, 403);
     browser = (await launchDashboardBrowser()).browser; const pageView = await browser.newPage({viewport: {width: 1000, height: 640}});
     const errors = []; pageView.on('pageerror', error => errors.push(error.message));
-    await pageView.goto(app.base); await pageView.locator('#footer').filter({hasText: '2.4.0'}).waitFor();
+    await pageView.goto(app.base); await pageView.locator('#footer').filter({hasText: '2.4.1'}).waitFor();
     await pageView.locator('#pause').click();
     await pageView.locator('#more').click();
     await pageView.locator('#clear-logs').click();
@@ -214,7 +214,7 @@ test('clear completed logs preserves running output, task evidence, failure clos
     assert.equal(await pageView.locator('.component-version').count(), 5);
     assert((await pageView.locator('.component-versions').textContent()).includes('1.0.4258.31'));
     const report = await (await fetch(app.base + 'api/diagnostics')).json();
-    const mcp = report.versions.find(row => row.label === '本地 MCP'); assert.equal(mcp.running, '2.4.0'); assert.equal(mcp.installed, '2.4.0'); assert.equal(mcp.restart_required, false);
+    const mcp = report.versions.find(row => row.label === '本地 MCP'); assert.equal(mcp.running, '2.4.1'); assert.equal(mcp.installed, '2.4.1'); assert.equal(mcp.restart_required, false);
     assert.deepEqual(errors, []);
   } finally { try { if (browser) await browser.close(); } finally { await app.stop(); fs.rmSync(root, {recursive: true, force: true}); } }
 });

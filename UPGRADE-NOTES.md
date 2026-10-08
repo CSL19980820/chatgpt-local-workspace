@@ -1,15 +1,32 @@
 # 版本升级说明
 
-按版本倒序排列，最新版本在前。当前版本为 **2.4.0**，上一公开版本为 2.3.0；2.3.0 之后的本地修复（旧日志、旧对话和执行计划的完整清理）已并入 2.4.0。各节记录的是该版本发布时的情况，不代表当前运行状态。1.3.0～1.6.0 为历史开发 / 构建记录，仓库现有 tag 从 v1.7.0 开始。
+按版本倒序排列，最新版本在前。当前版本为 **2.4.1**，上一公开版本为 2.4.0；2.3.0 之后的本地修复（旧日志、旧对话和执行计划的完整清理）已并入 2.4.0。各节记录的是该版本发布时的情况，不代表当前运行状态。1.3.0～1.6.0 为历史开发 / 构建记录，仓库现有 tag 从 v1.7.0 开始。
 
-演进顺序（从早到晚）：1.3.0 → 1.4.0 → 1.4.1 → 1.5.0 → 1.6.0 → 1.7.0 → 2.0.0 → 2.0.1 → 2.0.2 → 2.1.0 → 2.2.0 → 2.2.1 → 2.3.0 → 2.4.0
+演进顺序（从早到晚）：1.3.0 → 1.4.0 → 1.4.1 → 1.5.0 → 1.6.0 → 1.7.0 → 2.0.0 → 2.0.1 → 2.0.2 → 2.1.0 → 2.2.0 → 2.2.1 → 2.3.0 → 2.4.0 → 2.4.1
+
+## 2.4.1 · 2026-10-09 · 折叠 Tunnel 启动日志
+
+### 行为变化
+
+- 桌面“原始日志”页签不再逐行显示 Tunnel Client 启动时的 fx 依赖注入日志。Tunnel Client 0.0.16 在 `--log.level info` 下每次启动输出约 240 条这类 INFO（2.3.0 搭配的 0.0.14 也有约 215 条，不是 2.4.0 引入的问题），现在每次启动合并为一行“已折叠 N 条 Tunnel 启动内部日志”，N 随启动过程实时增加。
+- 判定规则：只处理 JSON 格式、`level` 为 INFO、`msg` 与下列事件名**完全相同**的行：`provided`、`replaced`、`decorated`、`supplied`、`invoking`、`run`、`OnStart hook executing`、`OnStart hook executed`、`OnStop hook executing`、`OnStop hook executed`、`initialized custom fxevent.Logger`、`started`。其中 9 个在真实 0.0.16 启动输出中出现过，`replaced`、`decorated`、`started` 是 fx 同类的成功事件。fx 的失败事件（`OnStart hook failed`、`start failed` 等）不在名单里，本身也是 ERROR。
+- 照常显示：所有 WARN / ERROR；`🩺 HEALTH URL`、`🌐 WEB UI`、`tunnel-client startup summary`、`mcp channel route resolved`、`starting/stopping control-plane poller`、`poller started/stopped`、`stdio MCP command started/exited`、`🟢 tunnel-client started` 等 INFO；`[Workspace]`、`[Dashboard]` 行与桌面程序自己的提示。
+- 分组：每次点击“启动连接”重新开始计数；与上一条被折叠的行间隔超过 10 秒时另起一行（例如 Tunnel 自行退出时的 OnStop 日志）。清空日志后同样重新开始。
+- 被折叠的行不进入原始日志列表，也不占 4000 行容量；“复制原始日志”复制的是折叠后的内容。需要完整输出时打开 Tunnel 状态页 `/ui`。
+- 启动参数仍为 `--log.format json --log.level info`。没有改成 `warn`：那样会同时丢掉健康地址、启动摘要、MCP 路由等有用的 INFO。
+
+### 升级
+
+- 从 2.4.0 升级：替换 `LocalWorkspace.exe` 即可（运行文件中只有它有变化；用 `Apply-Update.ps1` 整体替换也可以）。工具、接口、数据文件和 `settings.json` 都没有变化。
+- 在 ChatGPT“设置 → 连接器 → 本地工作区 → 信息”点**刷新**后调用 `get_workspace_status`，应返回 `version: 2.4.1`、`tool_count: 23`。
+- 从 2.3.x 升级仍按下面的清单操作。
 
 ## 从 2.3.x 升级清单
 
 1. **先收尾**：完成运行中的任务，再退出旧程序。退出桌面程序会结束它托管的命令树。
 2. **替换文件**：用 `Apply-Update.ps1` 或手动替换发行包中的 `LocalWorkspace.exe`、`tunnel-client.exe`（0.0.16）、`dashboard.html`、`runtime-components.json` 与许可证。更新脚本默认拒绝覆盖运行中的程序，保留最近 3 个回滚目录。
 3. **首次启动**：新版自动删除旧的 `activity.bin`、`activity-state.bin`、`plans.bin`、`threads.bin`，旧对话只迁移为加密的最小身份关联。启动后侧栏、计划和时间线为空，这是预期结果。`changes.bin`、`requests.bin`、`settings.json` 与 Windows 凭据保留。
-4. **刷新 ChatGPT 工具**：在“设置 → 连接器 → 本地工作区 → 信息”点**刷新**，确认列表为 23 个工具；新开聊天调用 `get_workspace_status`，应返回 `version: 2.4.0`、`tool_count: 23`。
+4. **刷新 ChatGPT 工具**：在“设置 → 连接器 → 本地工作区 → 信息”点**刷新**，确认列表为 23 个工具；新开聊天调用 `get_workspace_status`，应返回 `version: 2.4.1`、`tool_count: 23`。
 5. **Codex 用户**：把 `config.toml` 中 `enabled_tools`、`disabled_tools`、`[mcp_servers.<名>.tools.<工具>]` 里的旧工具名改成新名字（对照见下文“工具删合”），推荐配置见 [README](README.md#codex-推荐配置)。
 6. **自建客户端**：`tool_count` 核对值改为 23；旧工具名按对照迁移；需要 `full_output` 时传 `include_full_output: true`；轮询改用 `read_command` 的 `yield_time_ms` + `offset`；文件属性改用 `list_directory`（`kind: "file"`）。
 7. **继续旧任务**：旧计划和验证记录不再恢复，用 `update_plan` 重新登记当前计划和证据。重启前未确认完成的命令请求返回 `REQUEST_RECONCILIATION_REQUIRED`，不会被重跑。

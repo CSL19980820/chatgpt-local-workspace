@@ -12,7 +12,7 @@ const delay=ms=>new Promise(r=>setTimeout(r,ms));
 // 2.4.0: get_workspace_status with path replaces read_workspace_activity; the snapshot is result.workspace.
 const observe=async(args={})=>{const r=await call('get_workspace_status',{path:root,...args});assert(r.result.workspace,'workspace snapshot missing');return {...r,result:r.result.workspace};};
 async function main(){
- const init=await request('initialize');assert.equal(init.result.serverInfo.version,'2.4.0');
+ const init=await request('initialize');assert.equal(init.result.serverInfo.version,'2.4.1');
  const rendered=await observe();assert.equal(rendered.result.activity.length,0);
  const started=Date.now();let done=false;
  const long=call('exec_command',{cwd:root,cmd:'printf first; sleep 3; printf last',yield_time_ms:5000}).then(r=>{done=true;return r;});

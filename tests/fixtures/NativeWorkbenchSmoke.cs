@@ -58,7 +58,7 @@ class NativeWorkbenchSmoke
                 hostType.GetMethod("ZoomReset").Invoke(host,null);
                 Require(Math.Abs(view.ZoomFactor-1.0)<0.01&&Math.Abs(seen-1.0)<0.01,"zoom reset was not applied and reported");
                 string footer="";for(int i=0;i<50;i++){footer=await view.CoreWebView2.ExecuteScriptAsync("document.querySelector('#footer')?.textContent || ''");if(footer.Contains("2.4.0"))break;await Task.Delay(100);}
-                Require(footer.Contains("2.4.0"),"embedded page did not receive the real backend version");
+                Require(footer.Contains("2.4.1"),"embedded page did not receive the real backend version");
                 string empty=await view.CoreWebView2.ExecuteScriptAsync("document.body.innerText.includes('暂无调用记录') && document.querySelectorAll('#threads .thread').length===1");
                 Require(empty=="true","embedded page restored old logs or conversations");
                 using(var file=File.Create(args[3]+".png"))await view.CoreWebView2.CapturePreviewAsync(CoreWebView2CapturePreviewImageFormat.Png,file);

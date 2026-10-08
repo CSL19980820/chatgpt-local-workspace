@@ -19,7 +19,7 @@ const child=spawn(tunnel,['run','--control-plane.tunnel-id',settings.Tunnel,'--h
 const closed=new Promise(resolve=>child.once('close',resolve));
 let initialized=false,discovered=false;let startError;
 child.on('error',e=>startError=e);
-for(const stream of [child.stdout,child.stderr])stream.on('data',chunk=>{const text=chunk.toString();initialized ||=text.includes('[Workspace] initialize | 2.4.0');discovered ||=text.includes('[Workspace] tools/list | 23 tools');});
+for(const stream of [child.stdout,child.stderr])stream.on('data',chunk=>{const text=chunk.toString();initialized ||=text.includes('[Workspace] initialize | 2.4.1');discovered ||=text.includes('[Workspace] tools/list | 23 tools');});
 async function run(){
  try{
   const deadline=Date.now()+45000;let ready=false;

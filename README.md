@@ -4,7 +4,7 @@
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-green" alt="MIT License"></a>
   <img src="https://img.shields.io/badge/platform-Windows%2010%2F11%20x64-blue" alt="Windows 10/11 x64">
   <img src="https://img.shields.io/badge/.NET%20Framework-4.8-orange" alt=".NET Framework 4.8">
-  <img src="https://img.shields.io/badge/version-2.4.0-brightgreen" alt="v2.4.0">
+  <img src="https://img.shields.io/badge/version-2.4.1-brightgreen" alt="v2.4.1">
 </p>
 
 <p align="center">
@@ -21,16 +21,23 @@
 | --- | --- |
 | ![桌面程序](docs/images/desktop-app.png) | ![实时工作台](docs/images/dashboard-timeline.png) |
 
-当前版本 **2.4.0**（2026-10-08，上一公开版本 2.3.0）。各版本变化见 [升级说明](UPGRADE-NOTES.md)，接口迁移和上游限制见 [2.4.0 发行说明](docs/RELEASE-2.4.0.md)，验证结果见 [验证记录](VERIFICATION.md)。
+当前版本 **2.4.1**（2026-10-09，上一公开版本 2.4.0）。各版本变化见 [升级说明](UPGRADE-NOTES.md)，接口迁移和上游限制见 [2.4.0 发行说明](docs/RELEASE-2.4.0.md)，验证结果见 [验证记录](VERIFICATION.md)。
 
 ## 目录
 
-- [2.4.0 的变化](#240-的变化)
+- [2.4.1 的变化](#241-的变化) · [2.4.0 的变化](#240-的变化)
 - [特性一览](#特性一览) · [环境要求](#环境要求) · [快速开始](#快速开始) · [怎么用](#怎么用)
 - [23 个工具](#23-个工具)（含 [2.4.0 工具删合对照](#240-工具删合对照)、[Codex 推荐配置](#codex-推荐配置)）
 - [实时工作台](#实时工作台) · [桌面程序](#桌面程序)
 - [命令执行细节](#命令执行细节) · [过程可见性](#过程可见性) · [版本历史](#版本历史)
 - [从源码构建](#从源码构建) · [更新与替换](#更新与替换) · [常见问题](#常见问题) · [安全说明](#安全说明) · [协议兼容性](#协议兼容性)
+
+## 2.4.1 的变化
+
+- **原始日志折叠 Tunnel 启动噪声**：Tunnel Client 0.0.16 在 `--log.level info` 下会把每一步 fx 依赖注入都打成 INFO（每次启动约 240 条），淹没有用的信息。桌面“原始日志”页签现在把这些行折叠为一行“已折叠 N 条 Tunnel 启动内部日志”，每次启动一行。只按精确的事件名折叠（`provided`、`replaced`、`decorated`、`supplied`、`invoking`、`run`、`OnStart/OnStop hook executing/executed`、`initialized custom fxevent.Logger`、`started`），且只折叠 INFO；WARN / ERROR、健康地址、启动摘要、MCP 路由、控制面轮询启停照常显示。详见“[桌面程序](#桌面程序)”。
+- 工具、接口、数据格式和 Tunnel Client 版本都没有变化，从 2.4.0 升级只需替换文件。
+
+下载 [v2.4.1 Windows x64 发行包](https://github.com/CSL19980820/chatgpt-local-workspace/releases/tag/v2.4.1)。
 
 ## 2.4.0 的变化
 
@@ -103,7 +110,7 @@
 
 > 调用 get_workspace_status 确认连接
 
-应返回 `version: 2.4.0`、`tool_count: 23`、`protocol_versions`、实际程序路径和进程实例 ID。**原始日志**页签会依次出现 `initialize`、`tools/list` 与工具回执；只显示“已连接”不能证明 ChatGPT 已刷新工具。Tunnel 0.0.16 要求 legacy 请求先完成 `initialize` 与 `notifications/initialized`；modern 请求按协议携带完整协商信息。
+应返回 `version: 2.4.1`、`tool_count: 23`、`protocol_versions`、实际程序路径和进程实例 ID。**原始日志**页签会依次出现 `initialize`、`tools/list` 与工具回执；只显示“已连接”不能证明 ChatGPT 已刷新工具。Tunnel 0.0.16 要求 legacy 请求先完成 `initialize` 与 `notifications/initialized`；modern 请求按协议携带完整协商信息。
 
 ## 怎么用
 
@@ -228,7 +235,7 @@ output_token_limit = 12000
 - 接着是**全部对话**和“对话 N”分组。“对话 N”标题旁的 **+** 用来生成登记指令。有调用正在运行时，“全部对话”显示转圈，否则显示调用总数。
 - 每个对话占两行：第一行是标题，第二行是“来源 · N 分钟前”。右侧在有调用运行时显示转圈，否则用红色数字显示失败次数。当前对话用底色标出。
 - 还没有登记对话时，提示“还没有登记的对话。点 + 登记后，调用会按对话归类。”
-- 底部固定显示**未归属**和**诊断连接**；当前版本号（如 `v2.4.0`）以浅灰小字显示在“诊断连接”这一行的右侧。对话栏收起或处于图标栏时只显示图标。
+- 底部固定显示**未归属**和**诊断连接**；当前版本号（如 `v2.4.1`）以浅灰小字显示在“诊断连接”这一行的右侧。对话栏收起或处于图标栏时只显示图标。
 
 ### 标题栏与对话统计
 
@@ -396,7 +403,7 @@ output_token_limit = 12000
 - **四个页签**：
   - **实时工作台**：内嵌上面的工作台页面；未连接时显示“启动连接”入口。
   - **操作记录**：同一活动流的表格视图（时间 / 线程 / 操作 / 内容），可按对话筛选，双击行或 Ctrl+C 复制。
-  - **原始日志**：隧道与 MCP 的完整原始输出，按级别着色，尾随跟随。
+  - **原始日志**：隧道与 MCP 的原始输出，按级别着色，尾随跟随。2.4.1 起，Tunnel Client 启动时 INFO 级别的 fx 依赖注入日志（`provided`、`run`、`invoking`、`supplied`、`OnStart/OnStop hook executing/executed` 等，0.0.16 每次启动约 240 条）折叠为一行“已折叠 N 条 Tunnel 启动内部日志”，每次启动一行；WARN / ERROR 一律显示，健康地址、启动摘要、MCP 路由、控制面轮询启停等有用的 INFO 照常显示。完整输出可在 Tunnel 状态页 `/ui` 查看；“复制原始日志”复制的是折叠后的内容。
   - **连接配置**：Tunnel ID 与 API Key，配置只保存在本机。
 - **更多菜单**：刷新工作台、诊断连接、清空已完成日志、复制原始日志、复制工作台链接。调用日志、对话列表和执行计划在程序退出后清空。
 - **WebView2**：缺少运行时时，“实时工作台”页签提示原因并提供“在浏览器打开”；工具功能不受影响。
@@ -428,6 +435,7 @@ output_token_limit = 12000
 
 | 版本 | 日期 | 要点 | 工具数 |
 | --- | --- | --- | --- |
+| [2.4.1](UPGRADE-NOTES.md#241--2026-10-09--折叠-tunnel-启动日志) | 2026-10-09 | 原始日志折叠 Tunnel 启动时的 fx INFO 日志 | 23 |
 | [2.4.0](docs/RELEASE-2.4.0.md) | 2026-10-08 | 工具删合、工作台重做、对话来源与统计、旧记录实际删除、手动清空、组件升级、缩放 | 23 |
 | [2.3.0](docs/RELEASE-2.3.0.md) | 2026-09-30 | 命令重试去重与输出分页、文件版本校验与预览、文件历史与撤销、Git 私有审阅基准、凭据迁入 Windows 凭据管理器 | 28 |
 | [2.2.1](docs/RELEASE-2.2.1.md) | 2026-09-21 | 任务提示改为“任务详情”按钮，点击才打开 | 26 |
