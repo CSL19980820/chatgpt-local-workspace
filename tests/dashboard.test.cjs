@@ -19,9 +19,9 @@ async function main(){
  const bad=await request('tools/call',{name:'register_conversation',arguments:{title:'bad',path:root,chat_id:'invented'}});assert(bad.error||bad.result.isError);
  await call('update_plan',{path:root,thread_id:a.thread_id,plan:[{step:'检查当前页面',status:'completed'},{step:'验证持续输出与时间线',status:'in_progress'},{step:'完成页面验收',status:'pending'}]});
  await call('update_plan',{path:root,thread_id:b.thread_id,plan:[{step:'检查隐藏命令',status:'pending'}]});
- await call('file_info',{path:root,thread_id:b.thread_id});
+ await call('list_directory',{path:root,thread_id:b.thread_id});
  await call('read_file',{path:path.join(root,'missing.txt'),thread_id:b.thread_id});
- await call('file_info',{path:root});
+ await call('list_directory',{path:root});
  const seconds=process.argv.includes('--preview')?60:3;
  const command=(await call('exec_command',{cwd:root,thread_id:a.thread_id,cmd:`printf '正在检查实时输出…\n'; for i in $(seq 1 ${seconds}); do printf '步骤 %s：检查完成\n' "$i"; sleep 1; done; printf '验收完成\n'`,yield_time_ms:0})).result;
  const one=await get(a.thread_id),two=await get(b.thread_id),none=await get('unassigned');
@@ -36,7 +36,7 @@ async function main(){
  // Parallel test files slow the shell down, so wait for the real completion instead of a fixed delay.
  let final=await get(a.thread_id);for(let n=0;final.commands[0].running&&n<40;n++){await delay(300);final=await get(a.thread_id);}
  assert.equal(final.commands[0].running,false);assert(final.commands[0].output.includes('验收完成'));assert.equal(final.commands[0].exit_code,0);
- const delta=(await call('poll_command',{session_id:command.session_id,thread_id:a.thread_id,yield_ms:0})).result;assert(delta.output.includes('验收完成'));
+ const delta=(await call('write_stdin',{session_id:command.session_id,thread_id:a.thread_id,yield_time_ms:0})).result;assert(delta.output.includes('验收完成'));
  assert(log.includes('[thread='+a.thread_id+']'));assert(log.includes('[thread='+b.thread_id+']'));
  console.log('PASS local HTTP observed actual running->complete command without consuming incremental output');
 }

@@ -5,29 +5,33 @@ using System.Drawing.Drawing2D;
 using System.Windows.Forms;
 
 // Visual language of the desktop shell. Tokens mirror src/dashboard.css (the embedded
-// workbench) so the window and the page read as one product: same teal-green primary,
+// workbench) so the window and the page read as one product: same neutral grays,
 // same hairline borders, same mono for machine data.
 static class Theme
 {
-    public static readonly Color Window = Color.FromArgb(246, 248, 247);
-    public static readonly Color Surface = Color.White;
-    public static readonly Color Border = Color.FromArgb(228, 233, 231);
-    public static readonly Color BorderStrong = Color.FromArgb(205, 214, 211);
-    public static readonly Color Text = Color.FromArgb(26, 40, 37);
-    public static readonly Color Muted = Color.FromArgb(106, 121, 117);
-    public static readonly Color Faint = Color.FromArgb(150, 163, 159);
-    public static readonly Color Primary = Color.FromArgb(22, 124, 103);
-    public static readonly Color PrimaryHover = Color.FromArgb(16, 103, 85);
-    public static readonly Color PrimarySoft = Color.FromArgb(231, 244, 240);
-    public static readonly Color Accent = Color.FromArgb(49, 168, 138);
-    public static readonly Color Danger = Color.FromArgb(190, 62, 55);
-    public static readonly Color DangerSoft = Color.FromArgb(250, 237, 236);
-    public static readonly Color Warn = Color.FromArgb(168, 116, 18);
-    public static readonly Color WarnSoft = Color.FromArgb(250, 243, 228);
-    public static readonly Color NeutralSoft = Color.FromArgb(238, 241, 240);
-    public static readonly Color RowHover = Color.FromArgb(244, 248, 246);
-    public static readonly Color RowSelect = Color.FromArgb(231, 244, 240);
-    public static readonly Color Console = Color.FromArgb(250, 251, 250);
+    // Neutral palette shared with the web workbench (see dashboard tokens): no hue except status colors.
+    public static readonly Color Window = Color.FromArgb(247, 247, 247);      // #f7f7f7, same as the page shell (--frame)
+    public static readonly Color Surface = Color.White;                       // #ffffff
+    public static readonly Color Border = Color.FromArgb(229, 229, 229);      // #e5e5e5
+    public static readonly Color BorderStrong = Color.FromArgb(212, 212, 212);// #d4d4d4
+    public static readonly Color Text = Color.FromArgb(13, 13, 13);           // #0d0d0d
+    public static readonly Color Muted = Color.FromArgb(93, 93, 93);          // #5d5d5d
+    public static readonly Color Faint = Color.FromArgb(143, 143, 143);       // #8f8f8f
+    public static readonly Color Primary = Color.FromArgb(13, 13, 13);        // #0d0d0d, white text
+    public static readonly Color PrimaryHover = Color.FromArgb(48, 48, 48);   // #303030
+    public static readonly Color PrimarySoft = Color.FromArgb(232, 232, 232); // #e8e8e8
+    public static readonly Color Disabled = Color.FromArgb(196, 196, 196);    // #c4c4c4
+    public static readonly Color Accent = Color.FromArgb(2, 133, 255);        // #0285ff focus ring only
+    public static readonly Color Ok = Color.FromArgb(0, 134, 53);             // #008635
+    public static readonly Color OkSoft = Color.FromArgb(237, 250, 242);      // #edfaf2
+    public static readonly Color Danger = Color.FromArgb(186, 38, 35);        // #ba2623
+    public static readonly Color DangerSoft = Color.FromArgb(255, 240, 240);  // #fff0f0
+    public static readonly Color Warn = Color.FromArgb(186, 142, 0);          // #ba8e00
+    public static readonly Color WarnSoft = Color.FromArgb(255, 246, 217);    // #fff6d9
+    public static readonly Color NeutralSoft = Color.FromArgb(237, 237, 237); // #ededed
+    public static readonly Color RowHover = Color.FromArgb(239, 239, 239);    // #efefef
+    public static readonly Color RowSelect = Color.FromArgb(232, 232, 232);   // #e8e8e8
+    public static readonly Color Console = Color.FromArgb(250, 250, 250);     // #fafafa
 
     public static readonly Font Title = Ui(14.5f, FontStyle.Bold);
     public static readonly Font Body = Ui(9.5f);
@@ -86,7 +90,7 @@ class UiButton : Control
         Color fill = Color.Transparent, border = Color.Transparent, fore = Theme.Text;
         if (variant == Variant.Primary)
         {
-            fill = Enabled ? (pressed ? Theme.PrimaryHover : hover ? Theme.PrimaryHover : Theme.Primary) : Color.FromArgb(158, 196, 186);
+            fill = Enabled ? (pressed ? Theme.PrimaryHover : hover ? Theme.PrimaryHover : Theme.Primary) : Theme.Disabled;
             fore = Color.White;
         }
         else if (variant == Variant.Secondary)
@@ -104,7 +108,7 @@ class UiButton : Control
         {
             using (var b = new SolidBrush(fill)) g.FillPath(b, path);
             if (border != Color.Transparent) using (var pen = new Pen(border, 1)) g.DrawPath(pen, path);
-            if (Focused && Enabled) using (var pen = new Pen(Color.FromArgb(90, Theme.Accent), 2)) { var f = new Rectangle(2, 2, Width - 4, Height - 4); using (var fp = Theme.Round(f, 6)) g.DrawPath(pen, fp); }
+            if (Focused && Enabled) using (var pen = new Pen(Theme.Accent, 2)) { var f = new Rectangle(2, 2, Width - 4, Height - 4); using (var fp = Theme.Round(f, 6)) g.DrawPath(pen, fp); }
         }
         TextRenderer.DrawText(g, Text, variant == Variant.Ghost ? Theme.Small : Theme.SmallBold, new Rectangle(0, 0, Width, Height), fore, TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter);
     }
@@ -164,7 +168,7 @@ class UiInput : Control
     protected override bool ProcessCmdKey(ref Message msg, Keys keys) { return box.Focused ? false : base.ProcessCmdKey(ref msg, keys); }
 }
 
-// Underline tabs in the workbench's section-head style; labels may carry a muted count.
+// Flat tabs: the selected tab sits on a #e8e8e8 rounded background, no underline; labels may carry a muted count.
 class UiTabs : Control
 {
     readonly List<string> labels = new List<string>();
@@ -175,7 +179,7 @@ class UiTabs : Control
     public UiTabs()
     {
         SetStyle(ControlStyles.AllPaintingInWmPaint | ControlStyles.UserPaint | ControlStyles.OptimizedDoubleBuffer | ControlStyles.SupportsTransparentBackColor, true);
-        BackColor = Color.Transparent; Height = 38; Cursor = Cursors.Hand;
+        BackColor = Color.Transparent; Height = 36; Cursor = Cursors.Hand;
     }
     public int Selected { get { return selected; } }
     public void AddTab(string label) { labels.Add(label); counts.Add(""); Invalidate(); }
@@ -205,10 +209,14 @@ class UiTabs : Control
         {
             bool sel = i == selected;
             var fore = sel ? Theme.Text : hover == i ? Theme.Text : Theme.Muted;
+            if (sel || hover == i)
+            {
+                var pill = new Rectangle(x - 10, 4, ends[i] - x + 20, Height - 9);
+                using (var path = Theme.Round(pill, 6)) using (var b = new SolidBrush(sel ? Theme.PrimarySoft : Theme.RowHover)) g.FillPath(b, path);
+            }
             TextRenderer.DrawText(g, labels[i], sel ? Theme.SmallBold : Theme.Small, new Rectangle(x, 0, ends[i] - x, Height - 2), fore, TextFormatFlags.VerticalCenter);
             int lx = x + TextRenderer.MeasureText(g, labels[i], Theme.SmallBold).Width + 4;
-            if (counts[i].Length > 0) TextRenderer.DrawText(g, counts[i], Theme.Tiny, new Rectangle(lx, 0, ends[i] - lx, Height - 2), sel ? Theme.Primary : Theme.Faint, TextFormatFlags.VerticalCenter);
-            if (sel) using (var pen = new Pen(Theme.Primary, 2)) g.DrawLine(pen, x, Height - 2, ends[i], Height - 2);
+            if (counts[i].Length > 0) TextRenderer.DrawText(g, counts[i], Theme.Tiny, new Rectangle(lx, 0, ends[i] - lx, Height - 2), sel ? Theme.Muted : Theme.Faint, TextFormatFlags.VerticalCenter);
             x = ends[i] + 26;
         }
     }
@@ -230,7 +238,7 @@ class UiStatusPill : Control
         var g = e.Graphics; Theme.Smooth(g);
         Color dot = Theme.Faint, fore = Theme.Muted; string text = "已停止";
         if (state == State.Connecting) { dot = Theme.Warn; fore = Theme.Warn; text = "正在连接"; }
-        else if (state == State.Live) { dot = Theme.Accent; fore = Theme.Primary; text = "已连接"; }
+        else if (state == State.Live) { dot = Theme.Ok; fore = Theme.Text; text = "已连接"; }
         else if (state == State.Error) { dot = Theme.Danger; fore = Theme.Danger; text = "连接异常"; }
         string label = "● " + text;
         Width = TextRenderer.MeasureText(g, label, Theme.SmallBold).Width + 20;
@@ -327,8 +335,8 @@ class ActivityGrid : Control
             var label = "回到最新 ↓";
             int w = TextRenderer.MeasureText(g, label, Theme.Tiny).Width + 18;
             var rect = new Rectangle(Width - w - 20, Height - 28, w, 22);
-            using (var path = Theme.Round(rect, 11)) { using (var b = new SolidBrush(Theme.PrimarySoft)) g.FillPath(b, path); using (var pen = new Pen(Theme.Accent, 1)) g.DrawPath(pen, path); }
-            TextRenderer.DrawText(g, label, Theme.Tiny, rect, Theme.Primary, TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter);
+            using (var path = Theme.Round(rect, 11)) { using (var b = new SolidBrush(Theme.PrimarySoft)) g.FillPath(b, path); using (var pen = new Pen(Theme.BorderStrong, 1)) g.DrawPath(pen, path); }
+            TextRenderer.DrawText(g, label, Theme.Tiny, rect, Theme.Text, TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter);
             jumpRect = rect;
         }
         else jumpRect = Rectangle.Empty;
@@ -444,8 +452,8 @@ class LogView : Control
             var label = "回到最新 ↓";
             int w = TextRenderer.MeasureText(g, label, Theme.Tiny).Width + 18;
             var rect = new Rectangle(Width - w - 20, Height - 30, w, 22);
-            using (var path = Theme.Round(rect, 11)) { using (var b = new SolidBrush(Theme.PrimarySoft)) g.FillPath(b, path); using (var pen = new Pen(Theme.Accent, 1)) g.DrawPath(pen, path); }
-            TextRenderer.DrawText(g, label, Theme.Tiny, rect, Theme.Primary, TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter);
+            using (var path = Theme.Round(rect, 11)) { using (var b = new SolidBrush(Theme.PrimarySoft)) g.FillPath(b, path); using (var pen = new Pen(Theme.BorderStrong, 1)) g.DrawPath(pen, path); }
+            TextRenderer.DrawText(g, label, Theme.Tiny, rect, Theme.Text, TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter);
             jumpRect = rect;
         }
         else jumpRect = Rectangle.Empty;

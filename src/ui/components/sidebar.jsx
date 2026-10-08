@@ -1,76 +1,83 @@
 import { cn } from 'cn';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-import { Icon } from './icons.jsx';
+import { Icon, SpinIcon } from './icons.jsx';
+import { since } from '@/lib/format.js';
 
-// A conversation is recognized by its printed initial instead of another identical dot:
-// in the collapsed rail that initial is the only thing left to tell them apart.
-const glyphOf = entry => (entry.icon ? <Icon name={entry.icon} /> : <span className="thread-initial">{Array.from(entry.title || '?')[0]}</span>);
+// The app mark: the hand-tuned 20px version of assets/local-workspace.svg (brackets + cursor),
+// pixel-aligned at 20px and 40px. The favicon in the template uses the master.
+const MARK = 'data:image/svg+xml,' + encodeURIComponent("<svg xmlns='http://www.w3.org/2000/svg' width='20' height='20' viewBox='0 0 20 20'><rect x='2' y='2' width='16' height='16' rx='3.5' fill='#ffffff'/><rect x='2.5' y='2.5' width='15' height='15' rx='3.0' fill='none' stroke='#cdcdcd'/><rect x='5' y='5' width='2' height='10' fill='#161616'/><rect x='5' y='5' width='3' height='2' fill='#161616'/><rect x='5' y='13' width='3' height='2' fill='#161616'/><rect x='13' y='5' width='2' height='10' fill='#161616'/><rect x='12' y='5' width='3' height='2' fill='#161616'/><rect x='12' y='13' width='3' height='2' fill='#161616'/><rect x='9' y='8' width='2' height='4' fill='#161616'/></svg>");
 
-// Each entry keeps its own call count, plus a live mark while something in it is running:
-// the list answers "which conversation is busy" without opening one.
-function Meta({ stats }) {
-  if (!stats || (!stats.total && !stats.running)) return null;
+// Right side of a conversation: a spinner while something runs, else the failed count.
+function Badge({ stats, total }) {
+  if (!stats) return null;
+  if (stats.running > 0) return <span className="thread-meta" title={stats.running + ' 个调用进行中'}><SpinIcon size={14} /></span>;
+  if (total) return stats.calls ? <span className="thread-meta tabular">{stats.calls}</span> : null;
+  if (stats.failed > 0) return <span className="thread-meta failed tabular" title={stats.failed + ' 次调用失败'}><Icon name="circleAlert" size={12} />{stats.failed}</span>;
+  return null;
+}
+
+// One quiet meta line under the title: source · last activity.
+function Sub({ source, stats, now }) {
+  const parts = [];
+  if (source) parts.push(<span key="s">{source}</span>);
+  if (stats && stats.lastAt) parts.push(<span key="t" className="tabular">{since(stats.lastAt, now) === '刚刚' ? '刚刚' : since(stats.lastAt, now) + '前'}</span>);
+  if (!parts.length) return null;
+  return <span className="thread-sub">{parts.map((part, index) => [index ? <i key={'d' + index} className="sep">·</i> : null, part])}</span>;
+}
+
+function Row({ id, title, icon, initial, active, stats, total, now, rail, onClick, pressed = true, source, sub = false, trail = null }) {
+  const button = (
+    <button type="button" id={id} className={cn('thread', active && 'active', sub && 'two-line')} aria-label={title}
+      title={rail ? undefined : title} aria-pressed={pressed ? !!active : undefined} onClick={onClick}>
+      <span className="thread-glyph">{icon ? <Icon name={icon} /> : <><Icon name="chat" className="glyph-icon" /><span className="thread-initial">{initial}</span></>}</span>
+      <span className="thread-text">
+        <b>{title}</b>
+        {sub ? <Sub source={source} stats={stats} now={now} /> : null}
+      </span>
+      {trail || <Badge stats={stats} total={total} />}
+    </button>
+  );
+  if (!rail) return button;
+  // Collapsed to the icon rail, the name only survives as a tooltip.
   return (
-    <span className="thread-meta">
-      {stats.running > 0 ? <i className="thread-live" title="有调用正在进行" /> : null}
-      <span>{stats.total}</span>
-    </span>
+    <Tooltip>
+      <TooltipTrigger asChild>{button}</TooltipTrigger>
+      <TooltipContent side="right">{title}</TooltipContent>
+    </Tooltip>
   );
 }
 
-// Conversation switcher: every registered thread, the unassigned bucket and the
-// registration entry point. Collapsing keeps the glyphs only.
-export function Sidebar({ conversations, thread, collapsed, stats, onSelect, onToggle, onSetup }) {
-  const rows = [{ thread_id: '', title: '全部对话', icon: 'layers' }, ...(conversations || [])];
-  const foot = [{ thread_id: 'unassigned', title: '未归属', icon: 'hash' }, { id: 'setup-toggle', title: '登记对话', icon: 'plus' }];
-  const entry = (item, key) => {
-    const all = item.thread_id === '';
-    const active = item.thread_id !== undefined && item.thread_id === thread;
-    const metric = stats && !item.id ? stats[all ? 'all' : item.thread_id || 'unassigned'] : null;
-    return (
-      <Tooltip key={key}>
-        <TooltipTrigger asChild>
-          <button
-            type="button"
-            id={item.id}
-            className={cn('thread', active && 'active')}
-            aria-label={item.title}
-            aria-pressed={item.id ? undefined : active}
-            onClick={() => (item.id ? onSetup() : onSelect(item.thread_id ? 'thread=' + encodeURIComponent(item.thread_id) : ''))}
-          >
-            <span className="thread-glyph">{glyphOf(item)}</span>
-            <b>{item.title}</b>
-            <Meta stats={metric} />
-          </button>
-        </TooltipTrigger>
-        <TooltipContent side="right">{item.title}</TooltipContent>
-      </Tooltip>
-    );
-  };
+// Conversation switcher. Top: all conversations (its row lines up with the header's title row;
+// the browser page adds the brand above it), then the registered ones, newest activity first;
+// the unassigned bucket and diagnostics stay at the bottom, the version quietly on the
+// diagnostics row. The collapse toggle lives in the main header so it never needs a row here.
+export function Sidebar({ conversations, thread, collapsed, rail: railAuto, loaded, stats, sources, now, version, onSelect, onSetup, onDiagnostics }) {
+  const pick = id => onSelect(id ? 'thread=' + encodeURIComponent(id) : '');
+  const list = conversations || [];
+  const rail = collapsed || railAuto;
   return (
     <aside className="sidebar" aria-label="工作区">
       <div className="sidebar-head">
-        <span className="brand"><Icon name="layers" size={18} /></span>
-        <strong className="sidebar-label">本地工作区</strong>
-        <Button
-          id="collapse"
-          variant="ghost"
-          size="icon-sm"
-          className="sidebar-toggle text-muted-foreground"
-          aria-expanded={!collapsed}
-          aria-label={collapsed ? '展开工作区' : '收起工作区'}
-          title={collapsed ? '展开工作区' : '收起工作区'}
-          onClick={onToggle}
-        >
-          <Icon name="panelLeft" />
-        </Button>
+        <span className="brand">{MARK ? <img className="brand-mark" src={MARK} alt="" aria-hidden="true" /> : null}本地工作区</span>
       </div>
       <nav id="threads" className="thread-list" aria-label="对话列表">
-        {rows.map(row => entry(row, row.thread_id || 'all'))}
+        <Row title="全部对话" icon="layers" active={thread === ''} stats={stats && stats['']} total now={now} rail={rail} onClick={() => pick('')} />
+        <div className="section-label">
+          <span>对话{list.length ? <em className="tabular">{list.length}</em> : null}</span>
+          <Button id="setup-toggle" variant="ghost" size="icon-xs" aria-label="登记对话" title="登记对话" onClick={onSetup}><Icon name="plus" size={14} /></Button>
+        </div>
+        {list.map(item => (
+          <Row key={item.thread_id} title={item.title || '未命名对话'} initial={Array.from(item.title || '?')[0]} sub
+            source={sources[item.thread_id]} active={item.thread_id === thread} stats={stats && stats[item.thread_id]} now={now} rail={rail}
+            onClick={() => pick(item.thread_id)} />
+        ))}
+        {loaded && list.length === 0 ? <p className="thread-empty">还没有登记的对话。点 + 登记后，调用会按对话归类。</p> : null}
       </nav>
       <div className="sidebar-foot">
-        {foot.map(item => entry(item, item.id))}
+        <Row id="unassigned" title="未归属" icon="inbox" active={thread === 'unassigned'} stats={stats && stats.unassigned} now={now} rail={rail} onClick={() => pick('unassigned')} />
+        <Row id="diagnostics" title="诊断连接" icon="activity" pressed={false} rail={rail} onClick={onDiagnostics}
+          trail={version ? <span id="footer" className="thread-meta version tabular" title={'本地工作区版本 ' + version}>v{version}</span> : null} />
       </div>
     </aside>
   );

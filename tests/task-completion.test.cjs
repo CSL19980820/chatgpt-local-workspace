@@ -18,7 +18,7 @@ test('completion checks, failure receipts, explicit blockers and resumable UI', 
     await rpc('initialize');for(const tool of (await rpc('tools/list')).result.tools)validators.set(tool.name,ajv.compile(tool.outputSchema));
     assert.equal((await check()).state,'untracked');
     const registered=await update();assert.equal(registered.isError,false);assert.equal(registered.structuredContent.task.unfinished_steps,1);
-    const read=await call('file_info',{path:root});assert(read.content[0].text.includes('1 unfinished'));assert.equal(read.structuredContent.task.can_finish,false);
+    const read=await call('list_directory',{path:root});assert(read.content[0].text.includes('1 unfinished'));assert.equal(read.structuredContent.task.can_finish,false);
     assert.deepEqual((await check()).unfinished_steps,['验证并交付']);
     assert((await update([plan[0]])).isError,'cannot silently drop outstanding scope');
     const complete=plan.map(p=>({...p,status:'completed'}));await update(complete);assert.equal((await check()).state,'verification_required');
@@ -27,7 +27,7 @@ test('completion checks, failure receipts, explicit blockers and resumable UI', 
     await update(complete.map(p=>({...p,evidence:''})));assert.equal((await check()).can_finish,false,'explicit empty evidence revokes old receipt');await update(complete);
     const running=(await call('exec_command',{cwd:root,shell:'powershell',cmd:'Start-Sleep -Seconds 30',yield_time_ms:0})).structuredContent.result;
     assert.equal((await check()).state,'running');assert.equal((await check()).can_finish,false);
-    await call('stop_command',{session_id:running.session_id});assert.equal((await check()).state,'needs_attention');assert.equal((await check()).last_issue,'COMMAND_STOPPED');
+    await call('write_stdin',{session_id:running.session_id,chars:'\u0003'});assert.equal((await check()).state,'needs_attention');assert.equal((await check()).last_issue,'COMMAND_STOPPED');
     await update(complete);assert.equal((await check()).can_finish,false);await update(complete,{resolved_issue_id:(await check()).last_issue_id,recovery_note:'Intentional stopped fixture reconciled'});assert.equal((await check()).can_finish,true);
     await call('exec_command',{cwd:root,shell:'powershell',cmd:'exit 7',yield_time_ms:3000});assert.equal((await check()).can_finish,false);
     await update(complete);assert.equal((await check()).can_finish,false);await update(complete,{resolved_issue_id:(await check()).last_issue_id,recovery_note:'Intentional failure fixture reconciled'});assert.equal((await check()).can_finish,true);

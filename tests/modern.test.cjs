@@ -40,10 +40,10 @@ async function main() {
   // 3. Modern tools/list: resultType + CacheableResult fields + icons; ping removed in modern era.
   const list = (await modern('tools/list', {})).result;
   assert.equal(list.resultType, 'complete');
-  assert.equal(list.tools.length, 28);
+  assert.equal(list.tools.length, 23);
   assert.equal(list.cacheScope, 'private'); assert(list.ttlMs > 0);
   assert(list.tools.every(t => Array.isArray(t.icons) && t.icons[0].src.startsWith('data:image/svg+xml;base64,') && t.icons[0].mimeType === 'image/svg+xml'), 'icons missing');
-  assert.equal(list._meta['io.modelcontextprotocol/serverInfo'].version, '2.3.0');
+  assert.equal(list._meta['io.modelcontextprotocol/serverInfo'].version, '2.4.0');
   const ping = await modern('ping', {});
   assert.equal(ping.error.code, -32601, 'ping must be removed in the modern era');
 
@@ -55,9 +55,10 @@ async function main() {
   const trace = '00-0af7651916cd43dd8448eb211c80319c-00f067aa0ba902b7-01';
   const read = await modernCall('read_file', { path: fixture }, fullCaps, { traceparent: trace });
   assert(!read.isError);
-  const activity = await modernCall('read_workspace_activity', { path: dir });
-  const traced = activity.structuredContent.result.activity.filter(a => a.trace === trace);
-  assert(traced.length >= 1, 'traceparent not recorded on activity: ' + JSON.stringify(activity.structuredContent.result.activity.map(a => a.tool + ':' + a.trace)));
+  const activity = await modernCall('get_workspace_status', { path: dir });
+  const traced = activity.structuredContent.result.workspace.activity.filter(a => a.trace === trace);
+  assert(traced.every(a => a.trace_id === '0af7651916cd43dd8448eb211c80319c' && a.turn_id === null), 'trace_id is parsed from traceparent');
+  assert(traced.length >= 1, 'traceparent not recorded on activity: ' + JSON.stringify(activity.structuredContent.result.workspace.activity.map(a => a.tool + ':' + a.trace)));
 
   const dry = await modernCall('write_file', {path:fixture,content:'preview-only',overwrite:true,dry_run:true});
   assert.equal(dry.resultType,'complete');assert.equal(dry.structuredContent.result.applied,false);assert.equal(fs.readFileSync(fixture,'utf8'),'v1\n');
@@ -116,7 +117,7 @@ async function main() {
   let final = early;
   for (let i = 0; i < 30 && final.status === 'working'; i++) { await sleep(300); final = (await modern('tasks/get', { taskId: task.taskId })).result; }
   assert.equal(final.status, 'completed', JSON.stringify(final));
-  assert(final.result.structuredContent.result.full_output.includes('task-ok'));
+  assert(final.result.structuredContent.result.output.includes('task-ok'));
   assert.equal(final.result.isError, false);
 
   // 6a. tasks/cancel stops the process tree; status becomes cancelled.
@@ -138,7 +139,8 @@ async function main() {
   const classic = await modernCall('exec_command', { shell: 'powershell', cmd: 'Start-Sleep -Seconds 5', cwd: dir, yield_time_ms: 0 }, { elicitation: {} });
   assert.equal(classic.resultType, 'complete');
   assert(classic.structuredContent.result.running && classic.structuredContent.result.session_id);
-  await modernCall('stop_command', { session_id: classic.structuredContent.result.session_id }, { elicitation: {} });
+  const stoppedClassic = await modernCall('write_stdin', { session_id: classic.structuredContent.result.session_id, chars: '\u0003' }, { elicitation: {} });
+  assert(stoppedClassic.structuredContent.result.stopped);
 
   // 7. Legacy era is untouched: initialize handshake, ping, no resultType on tools/list.
   const init = await request('initialize', { protocolVersion: '2025-06-18', capabilities: {}, clientInfo: { name: 'legacy-test', version: '1' } });
@@ -148,10 +150,10 @@ async function main() {
   const legacyPing = await request('ping');
   assert.deepEqual(legacyPing.result, {});
   const legacyList = await request('tools/list');
-  assert.equal(legacyList.result.tools.length, 28);
+  assert.equal(legacyList.result.tools.length, 23);
   assert(legacyList.result.resultType === undefined && legacyList.result.ttlMs === undefined, 'legacy tools/list must stay unchanged');
   const legacyStatus = await request('tools/call', { name: 'get_workspace_status', arguments: {} });
-  assert.equal(legacyStatus.result.structuredContent.result.version, '2.3.0');
+  assert.equal(legacyStatus.result.structuredContent.result.version, '2.4.0');
   assert(legacyStatus.result.structuredContent.result.protocol_versions.some(v => v.includes(PV)));
   console.log('PASS modern era: discover, negotiation, resultType/cache fields, icons, trace, MRTR gate, tasks lifecycle, legacy fallback');
 }

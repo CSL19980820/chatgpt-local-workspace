@@ -42,9 +42,10 @@ test('2.1 host sessions, attachment contract and actual diagnostic dashboard', {
     const nested=path.join(root,'nested');fs.mkdirSync(nested);await call('open_workspace',{path:nested},A);
     const status=(await call('get_workspace_status',{},A)).structuredContent.result;
     assert.equal(status.conversations.find(c=>c.thread_id===id).title,'2.1 验收对话');
-    assert.equal(status.conversations.find(c=>c.thread_id===id).association,'host_session');
+    assert.equal(status.conversations.find(c=>c.thread_id===id).association,'host_session');assert.equal(status.conversations.find(c=>c.thread_id===id).source,'chatgpt');
     const manual=(await call('register_conversation',{path:root,title:'手动兼容'})).structuredContent.result.thread_id;
-    assert.equal((await call('file_info',{path:root,thread_id:manual})).structuredContent.thread_id,manual);
+    assert.equal((await call('list_directory',{path:root,thread_id:manual})).structuredContent.thread_id,manual);
+    assert.equal((await call('get_workspace_status',{})).structuredContent.result.conversations.find(c=>c.thread_id===manual).source,'manual');
 
     const target=path.join(root,'confirmation.txt');fs.writeFileSync(target,'before');
     const gate=(await rpc('tools/call',{name:'write_file',arguments:{path:target,content:'after',overwrite:true},_meta:modern(A)})).result;
@@ -54,7 +55,7 @@ test('2.1 host sessions, attachment contract and actual diagnostic dashboard', {
     const task=(await rpc('tools/call',{name:'exec_command',arguments:{shell:'powershell',cmd:'Start-Sleep -Seconds 30',cwd:root,yield_time_ms:0},_meta:modern(A)})).result;
     assert.equal(task.resultType,'task');
     assert((await rpc('tasks/cancel',{taskId:task.taskId,_meta:modern(B)})).error);
-    assert((await call('stop_command',{session_id:task.taskId},B)).isError);
+    assert((await call('write_stdin',{session_id:task.taskId,chars:'\u0003'},B)).isError);
     assert(!(await rpc('tasks/cancel',{taskId:task.taskId,_meta:modern(A)})).error);
     const text=(await call('read_file',{path:target},A));assert.equal(text.structuredContent.result.lines[0],'1: after');assert(!text.content[0].text.includes('after'));
 
@@ -89,7 +90,7 @@ test('2.1 host sessions, attachment contract and actual diagnostic dashboard', {
     if(process.env.WORKSPACE_CAPTURE_DIAGNOSTICS==='1')await page.getByRole('dialog').screenshot({path:path.join(__dirname,'../docs/images/dashboard-diagnostics.png')});
     await page.keyboard.press('Escape');assert.equal(new URL(page.url()).hash,'');
     await page.evaluate(()=>location.hash='diagnostics');await page.getByRole('dialog').waitFor();
-    for(const width of [1000,640]){await page.setViewportSize({width,height:720});assert(await page.getByRole('dialog').evaluate(e=>e.getBoundingClientRect().right<=innerWidth&&e.scrollHeight<=e.clientHeight+1));}
+    for(const width of [1000,640]){await page.setViewportSize({width,height:720});assert(await page.getByRole('dialog').evaluate(e=>{const r=e.getBoundingClientRect(),o=getComputedStyle(e).overflowY;return r.left>=0&&r.right<=innerWidth&&r.bottom<=innerHeight+1&&(e.scrollHeight<=e.clientHeight+1||o==='auto'||o==='scroll');}),'diagnostics dialog must stay inside the viewport and scroll internally');}
     await page.emulateMedia({colorScheme:'dark'});await page.setViewportSize({width:1000,height:800});
     await page.waitForTimeout(250);
     if(process.env.WORKSPACE_CAPTURE_DIAGNOSTICS==='1')await page.getByRole('dialog').screenshot({path:path.join(__dirname,'../work/diagnostics-dark.png')});

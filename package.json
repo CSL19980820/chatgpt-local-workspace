@@ -11,15 +11,18 @@
     "ajv": "8.20.0",
     "class-variance-authority": "^0.7.1",
     "esbuild": "^0.28.2",
-    "lucide-react": "^1.46.0",
-    "playwright-core": "1.63.0",
+    "lucide-react": "^1.53.0",
+    "playwright-core": "1.64.0",
     "react": "^19.3.0",
     "react-dom": "^19.3.0",
-    "shadcn": "^4.21.0",
+    "shadcn": "^4.21.4",
     "tailwindcss": "4.3.3"
   },
   "dependencies": {
-    "cn": "^0.3.0",
-    "radix-ui": "^1.6.7"
+    "cn": "^0.4.0",
+    "radix-ui": "^1.7.0"
+  },
+  "overrides": {
+    "@parcel/watcher": "2.6.0"
   }
 }

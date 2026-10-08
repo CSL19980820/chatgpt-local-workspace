@@ -35,7 +35,7 @@ export function buildRows(snapshot, now = Date.now()) {
       status: failed ? 'failed' : call.status, live, sessionId: sessionId, session,
       started_at: call.started_at, start, elapsed_ms: elapsed, detail,
       trace: call.trace || null,
-      synthetic: false,
+      synthetic: false, raw: call,
     });
   }
 
@@ -48,7 +48,7 @@ export function buildRows(snapshot, now = Date.now()) {
     rows.push({
       id: 'session:' + command.session_id, tool: 'exec_command', thread_id: command.thread_id, target: command.cwd,
       status: 'running', live: true, sessionId: command.session_id, session: command,
-      started_at: command.started_at, start, elapsed_ms: Math.max(0, now - start), synthetic: true,
+      started_at: command.started_at, start, elapsed_ms: Math.max(0, now - start), synthetic: true, raw: command,
       detail: {
         kind: 'command', session_id: command.session_id, command: command.command, shell: command.shell,
         cwd: command.cwd, summary: firstLine(command.command), tool: 'exec_command', target: command.cwd,
@@ -56,8 +56,9 @@ export function buildRows(snapshot, now = Date.now()) {
     });
   }
 
+  // Oldest first: the stream reads top to bottom like a conversation, newest at the end.
   rows.sort((a, b) => a.start - b.start);
-  return rows.reverse();
+  return rows;
 }
 
 export const summaryOf = row => {

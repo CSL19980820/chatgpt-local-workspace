@@ -25,7 +25,7 @@ const bundle = esbuild.buildSync({
   format: 'iife',
   minify: true,
   jsx: 'automatic',
-  target: ['chrome110'],
+  target: ['chrome120'],
   define: { 'process.env.NODE_ENV': '"production"' },
   legalComments: 'none',
   logLevel: 'warning',

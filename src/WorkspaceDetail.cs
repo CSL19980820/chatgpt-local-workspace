@@ -66,6 +66,7 @@ static class WorkspaceDetail
         return new Dictionary<string,object>{
             {"path",display},{"name",Name(display)},{"operation",operation},{"size_bytes",size},
             {"previous_path",from.Length==0?null:from},
+            {"added",diff==null?0:Number(diff,"added")},{"removed",diff==null?0:Number(diff,"removed")},
             {"diff",diff==null?null:ShapeDiff(diff,budget)}};
     }
     // write_file reports the target path; edit_file replaces exactly one occurrence.
@@ -77,9 +78,17 @@ static class WorkspaceDetail
             {"kind","write"},{"session_id",null},
             {"files",new object[]{File(path,created?"add":"replace",Field(inner,"diff"),budget,new System.Text.UTF8Encoding(false).GetByteCount(content))}},
             {"count",1},{"overwrite",Flag(args,"overwrite")},{"label",created?"新建文件":"替换文件"}};
+        Totals(detail);
         string counts=Counts(Field(inner,"diff"));
         detail["summary"]=Name(Display(path))+" · "+(created?"新建文件":"替换文件")+(counts.Length>0?" · "+counts:"");
         return detail;
+    }
+    // Call-level totals for single-file writes mirror the file entry.
+    static void Totals(Dictionary<string,object> detail)
+    {
+        long added=0,removed=0;
+        foreach(object entry in Rows(detail,"files")){added+=Long(entry,"added");removed+=Long(entry,"removed");}
+        detail["added"]=added;detail["removed"]=removed;
     }
     static string Counts(object diff)
     {
@@ -104,6 +113,7 @@ static class WorkspaceDetail
             {"kind","write"},{"session_id",null},
             {"files",new object[]{File(path,"edit",Field(inner,"diff"),budget,0)}},
             {"count",1},{"replace",replace}};
+        Totals(detail);
         string counts=Counts(Field(inner,"diff"));
         detail["summary"]=Name(Display(path))+" · 精确替换"+(counts.Length>0?" · "+counts:"");
         return detail;
@@ -113,9 +123,10 @@ static class WorkspaceDetail
         var files=new List<object>();int added=0,removed=0,omitted=0;
         foreach(object item in Rows(inner,"files"))
         {
-            if(files.Count>=DiffFilesMax){omitted++;continue;}
             object diff=Field(item,"diff");
+            // Totals cover every file, including those omitted from the bounded file list.
             added+=Number(diff,"added");removed+=Number(diff,"removed");
+            if(files.Count>=DiffFilesMax){omitted++;continue;}
             files.Add(File(Text(item,"path"),Text(item,"operation"),diff,budget,0,Text(item,"previous_path")));
         }
         var detail=new Dictionary<string,object>{
@@ -128,16 +139,18 @@ static class WorkspaceDetail
     }
     static Dictionary<string,object> Review(object inner,Budget budget)
     {
-        var files=new List<object>();int omitted=0;
+        var files=new List<object>();int omitted=0;long added=0,removed=0;
         foreach(object item in Rows(inner,"files"))
         {
+            object diff=Field(item,"diff");added+=Number(diff,"added");removed+=Number(diff,"removed");
             if(files.Count>=DiffFilesMax){omitted++;continue;}
-            files.Add(File(Text(item,"path"),"update",Field(item,"diff"),budget,0));
+            files.Add(File(Text(item,"path"),"update",diff,budget,0));
         }
         var detail=new Dictionary<string,object>{
             {"kind","write"},{"session_id",null},{"files",files},{"count",Number(inner,"count",files.Count)},
             {"omitted_files",omitted+Number(inner,"omitted_files")},{"scope",Text(inner,"scope")},
-            {"untracked_changes",Number(inner,"untracked_changes")},{"root",Display(Text(inner,"path"))}};
+            {"untracked_changes",Number(inner,"untracked_changes")},{"root",Display(Text(inner,"path"))},
+            {"added",added},{"removed",removed}};
         detail["summary"]=Number(inner,"count",files.Count)+" 个文件有工具改动";
         return detail;
     }
@@ -251,7 +264,7 @@ static class WorkspaceDetail
             {"kind","command"},{"session_id",Text(inner,"session_id")},{"command",command},
             {"shell",Text(inner,"shell")},{"shell_executable",Text(inner,"shell_executable")},
             {"cwd",Display(Text(inner,"cwd"))},{"output_tail",Tail(Text(inner,"output"),OutputChars)},
-            {"output_chars",Text(inner,"full_output").Length},
+            {"output_chars",Field(inner,"output_chars")??(object)Text(inner,"output").Length},
             {"truncated",Flag(inner,"truncated")},{"running",Flag(inner,"running")},
             {"exit_code",Field(inner,"exit_code")},{"timed_out",Flag(inner,"timed_out")},{"stopped",Flag(inner,"stopped")},
             {"elapsed_seconds",Field(inner,"elapsed_seconds")},
@@ -259,6 +272,7 @@ static class WorkspaceDetail
             {"input",input.Length>0?Clip(input,NoteChars):null},{"sent_chars",input.Length}};
         if(tool=="exec_command")detail["summary"]=Clip(first,80);
         else if(tool=="stop_command")detail["summary"]="会话 "+ShortSession(inner)+" · 停止命令";
+        else if(tool=="read_command"&&args!=null&&(args.ContainsKey("yield_time_ms")||args.ContainsKey("yield_ms")))detail["summary"]="会话 "+ShortSession(inner)+" · 等待输出";
         else if(tool=="write_stdin")detail["summary"]="会话 "+ShortSession(inner)+(input.Length>0?" · 发送 "+input.Length+" 字符":" · 续读输出");
         else detail["summary"]="会话 "+ShortSession(inner)+" · 读取输出";
         return detail;
@@ -334,7 +348,12 @@ static class WorkspaceDetail
     static Dictionary<string,object> Info(string tool,object inner)
     {
         if(tool=="import_file")return Flag(inner,"created")?InfoRows(new List<object>{Row("保存位置",Display(Text(inner,"path")),true),Row("文件大小",Bytes(Long(inner,"size_bytes"))),Row("文件类型",Text(inner,"mime_type")),Row("SHA256",Text(inner,"sha256"),true),Row("结果","已创建新文件，未覆盖已有内容")},"已接收聊天附件"):InfoRows(new List<object>{Row("结果","未导入附件"),Row("原因",Text(inner,"message"))},"附件导入失败");
-        if(tool=="file_info")
+        if(tool=="file_info")return FileInfo(inner);
+        return InfoTail(tool,inner);
+    }
+    // Shared by the deprecated file_info and list_directory on a file path.
+    static Dictionary<string,object> FileInfo(object inner)
+    {
         {
             string path=Display(Text(inner,"path"));bool directory=Flag(inner,"directory");
             var rows=new List<object>{Row("路径",path,true),Row("类型",directory?"目录":"文件")};
@@ -344,6 +363,9 @@ static class WorkspaceDetail
             rows.Add(Row("属性",Text(inner,"attributes")));
             return InfoRows(rows,Name(path)+(directory?"/":""));
         }
+    }
+    static Dictionary<string,object> InfoTail(string tool,object inner)
+    {
         if(tool=="create_directory")
         {
             string path=Display(Text(inner,"path"));
@@ -382,6 +404,7 @@ static class WorkspaceDetail
             var rows=new List<object>{Row("版本",Text(inner,"version")),Row("实例",Text(inner,"instance_id"),true),Row("程序",Display(Text(inner,"executable")),true)};
             rows.Add(Row("工具数",Text(inner,"tool_count")));
             rows.Add(Row("运行中命令",Text(inner,"running_commands")));
+            rows.Add(Row("命令会话",Rows(inner,"commands").Length+" 个"));
             rows.Add(Row("面板地址",Display(Text(inner,"dashboard_url")),true));
             rows.Add(Row("默认 Shell",Text(inner,"default_shell")));
             var protocols=new List<string>();foreach(object item in Rows(inner,"protocol_versions"))protocols.Add(Convert.ToString(item));
@@ -412,7 +435,7 @@ static class WorkspaceDetail
         else if(tool=="read_file")detail=Read(args??new Dictionary<string,object>(),inner);
         else if(tool=="search_text"||tool=="search_files")detail=Search(tool,inner);
         else if(tool=="exec_command"||tool=="poll_command"||tool=="read_command"||tool=="stop_command"||tool=="write_stdin")detail=Command(tool,args,inner);
-        else if(tool=="list_directory")detail=Listing(inner);
+        else if(tool=="list_directory")detail=Text(inner,"kind")=="file"?FileInfo(Field(inner,"info")):Listing(inner);
         else if(tool=="git_status"||tool=="git_diff")detail=Git(tool,inner);
         else if(tool=="update_plan")detail=Plan(inner);
         else detail=Info(tool,inner);
@@ -442,8 +465,9 @@ static class WorkspaceDetail
                 foreach(object entry in Rows(detail,"files"))
                 {
                     var file=entry as Dictionary<string,object>;if(file==null)continue;
-                    file["operation"]=null;file["diff"]=null;file["size_bytes"]=0;file["previous_path"]=null;
+                    file["operation"]=null;file["diff"]=null;file["size_bytes"]=0;file["previous_path"]=null;file["added"]=0;file["removed"]=0;
                 }
+                if(detail.ContainsKey("added")){detail["added"]=0;detail["removed"]=0;}
             }
         }
         return detail;

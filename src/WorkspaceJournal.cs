@@ -17,6 +17,7 @@ static class WorkspaceJournal
     public sealed class Change { public string Id,Thread,Tool,Status; public DateTime At; public List<FileState> Files; public bool Undone; }
     static readonly object Gate=new object();
     static readonly List<Change> Changes=WorkspaceStore.Load("changes",()=>new List<Change>());
+    public static string[] ThreadReferences(){lock(Gate)return Changes.Select(c=>c.Thread).Distinct().ToArray();}
     const int FileLimit=16*1024*1024;
     const long TotalLimit=48L*1024*1024;
     public static string Hash(byte[] data) { if(data==null)return "missing";using(var sha=SHA256.Create())return BitConverter.ToString(sha.ComputeHash(data)).Replace("-","").ToLowerInvariant(); }

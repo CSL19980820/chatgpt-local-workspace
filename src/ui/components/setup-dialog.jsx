@@ -40,29 +40,29 @@ export function SetupDialog({ open, onOpenChange }) {
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[480px]">
+      <DialogContent className="setup-dialog">
         <DialogHeader>
           <DialogTitle>登记对话</DialogTitle>
           <DialogDescription>填写名称与目录，生成要发送给对应 ChatGPT 对话的登记指令。</DialogDescription>
         </DialogHeader>
-        <div className="grid gap-3">
-          <div className="grid gap-1.5">
+        <div className="form-grid">
+          <div className="form-field">
             <Label htmlFor="new-title">对话名称</Label>
             <Input id="new-title" value={title} onChange={event => setTitle(event.target.value)} placeholder="例如：优化自主交易员页面" />
           </div>
-          <div className="grid gap-1.5">
+          <div className="form-field">
             <Label htmlFor="new-path">工作目录</Label>
             <Input id="new-path" value={path} onChange={event => setPath(event.target.value)} placeholder="E:/my_space/your-project" />
           </div>
-          <div className="grid gap-1.5">
+          <div className="form-field">
             <Label htmlFor="new-chat">ChatGPT 对话链接（可选）</Label>
             <Input id="new-chat" value={chat} onChange={event => setChat(event.target.value)} placeholder="https://chatgpt.com/c/…" />
           </div>
-          <Button id="generate" className="w-full" onClick={generate}>生成登记指令</Button>
-          <Textarea id="prompt" readOnly value={prompt} aria-label="对话登记指令" className="h-24 text-[11px] leading-relaxed"
+          <Button id="generate" onClick={generate}>生成登记指令</Button>
+          <Textarea id="prompt" readOnly value={prompt} aria-label="对话登记指令" className="prompt-box"
             placeholder="填写名称和目录，生成后复制到对应的 ChatGPT 对话。" />
-          <Button id="copy-prompt" variant="outline" onClick={copy}>复制指令</Button>
-          {note ? <p id="setup-note" className="text-[11px] text-muted-foreground">{note}</p> : null}
+          <Button id="copy-prompt" variant="outline" onClick={copy} disabled={!prompt}>复制指令</Button>
+          {note ? <p id="setup-note" className="note" role="status">{note}</p> : null}
         </div>
       </DialogContent>
     </Dialog>

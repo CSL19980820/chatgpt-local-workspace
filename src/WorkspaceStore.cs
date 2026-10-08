@@ -46,6 +46,10 @@ static class WorkspaceStore
             AtomicWrite(Path.Combine(root, name + ".bin"), encrypted);
         }
     }
+    public static void Delete(string name)
+    {
+        lock (Gate) { Ensure(); File.Delete(Path.Combine(root, name + ".bin")); }
+    }
     public static void AtomicWrite(string path, byte[] data)
     {
         string temp = path + "." + Guid.NewGuid().ToString("N") + ".tmp";

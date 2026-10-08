@@ -4,14 +4,15 @@ using System.Linq;
 using System.Collections;
 using System.Collections.Generic;
 
-// Locally persisted task receipts. This checks declared evidence and observed execution;
+// Current-runtime task receipts. This checks declared evidence and observed execution;
 // it cannot verify the meaning of evidence or restart the host model after a final reply.
 static class WorkspaceTasks
 {
     public sealed class Step { public string step {get;set;} public string status {get;set;} public string evidence {get;set;} public string[] activity_ids {get;set;} }
     public sealed class Plan { public string Thread,Path,Explanation,State,Reason,Next,ResolvedIssue,RecoveryNote,RecoveryEvidence; public DateTime Updated; public Step[] Steps; }
     static readonly object Gate=new object();
-    static readonly Dictionary<string,Plan> Plans=WorkspaceStore.Load("plans",()=>new Dictionary<string,Plan>(StringComparer.OrdinalIgnoreCase));
+    static readonly Dictionary<string,Plan> Plans=new Dictionary<string,Plan>(StringComparer.OrdinalIgnoreCase);
+    public static void Initialize(){WorkspaceStore.Delete("plans");}
     static string Key(string path,string thread){return thread+"|"+path;}
     static string Text(IDictionary<string,object> map,string key,string fallback=""){object value;if(!map.TryGetValue(key,out value))return fallback;if(!(value is string))throw new ArgumentException(key+" must be a string");return (string)value;}
     public static object Update(string path,object steps,string explanation,Dictionary<string,object> args)
@@ -39,7 +40,7 @@ static class WorkspaceTasks
                 for(int i=0;i<plan.Steps.Length;i++){var step=plan.Steps[i];if(step.status=="completed"&&!((Dictionary<string,object>)list[i]).ContainsKey("evidence")){var old=previous.Steps.FirstOrDefault(x=>x.step==step.step&&x.status=="completed");if(old!=null){step.evidence=old.evidence;if(!((Dictionary<string,object>)list[i]).ContainsKey("activity_ids"))step.activity_ids=old.activity_ids;}}}
                 if(previous.Steps.Any(x=>x.status!="completed"&&!plan.Steps.Any(y=>y.step==x.step))&&string.IsNullOrWhiteSpace(explanation))throw new ArgumentException("Explain scope changes before removing or renaming unfinished steps; do not drop work to pass completion checks.");
             }else if(Plans.Count>=500)throw new ArgumentException("Plan limit reached (500)");
-            Plans[key]=plan;WorkspaceStore.Save("plans",Plans);}
+            Plans[key]=plan;}
         return View(plan);
     }
     static Plan[] Select(string path,string thread){lock(Gate)return Plans.Values.Where(p=>(thread.Length==0||p.Thread==thread)&&WorkspaceActivity.Within(p.Path,path)).ToArray();}
@@ -63,7 +64,7 @@ static class WorkspaceTasks
         string issue=Convert.ToString(commands["issue"]),issueId=Convert.ToString(commands["issue_id"]);DateTime issueAt=(DateTime)commands["issue_at"];
         if((DateTime)observation["failure_at"]>issueAt){issueAt=(DateTime)observation["failure_at"];issue=Convert.ToString(observation["failure"]);issueId=Convert.ToString(observation["failure_id"]);}
         // Updating a timestamp alone never resolves a failure. Closure is explicit and auditable.
-        bool recoveryValid=p.ResolvedIssue==issueId&&!string.IsNullOrWhiteSpace(p.RecoveryNote)&&(string.IsNullOrEmpty(p.RecoveryEvidence)||WorkspaceActivity.Evidence(p.RecoveryEvidence,p.Path,p.Thread,issueAt));
+        bool recoveryValid=(p.ResolvedIssue==issueId||WorkspaceActivity.SameFailure(p.ResolvedIssue,issueId,p.Path,p.Thread))&&!string.IsNullOrWhiteSpace(p.RecoveryNote)&&(string.IsNullOrEmpty(p.RecoveryEvidence)||WorkspaceActivity.Evidence(p.RecoveryEvidence,p.Path,p.Thread,issueAt));
         bool unresolved=issue.Length>0&&!recoveryValid;
         bool ready=p.State=="active"&&unfinished.Length==0&&evidence.Length==0&&!running&&!unresolved;
         string state=p.State!="active"?p.State:running?"running":unresolved?"needs_attention":ready?"ready":unfinished.Length==0?"verification_required":(DateTime.UtcNow-last).TotalMinutes>=2?"idle_unconfirmed":"active";

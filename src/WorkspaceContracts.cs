@@ -30,19 +30,21 @@ static class WorkspaceContracts
         var str=Type("string");var number=Type("number");var integer=Type("integer");var boolean=Type("boolean");
         // Common result facts, including the explicit failure envelope.
         p["path"]=str;p["error_code"]=str;p["message"]=str;
+        // Present only when a hidden 2.3 tool name was called; names the replacement.
+        p["deprecated"]=Shape(new Dictionary<string,object>{{"tool",str},{"replacement",str},{"removed_in",str}},"tool","replacement");
         string[] required=new string[0];
         if(new List<string>{"exec_command","read_command","poll_command","write_stdin","stop_command"}.Contains(tool)){
-            p["session_id"]=str;p["running"]=boolean;p["exit_code"]=Nullable("integer");p["output"]=str;p["full_output"]=str;p["output_mode"]=new{@enum=new[]{"delta","snapshot","page"}};p["elapsed_seconds"]=number;p["truncated"]=boolean;p["timed_out"]=boolean;p["stopped"]=boolean;required=new[]{"session_id","running","output","exit_code"};
+            p["session_id"]=str;p["running"]=boolean;p["exit_code"]=Nullable("integer");p["output"]=str;p["full_output"]=str;p["output_chars"]=integer;p["logs_cleared"]=boolean;p["output_mode"]=new{@enum=new[]{"delta","snapshot","page"}};p["elapsed_seconds"]=number;p["truncated"]=boolean;p["timed_out"]=boolean;p["stopped"]=boolean;required=new[]{"session_id","running","output","exit_code"};
         }else if(tool=="read_file"){
             p["lines"]=ArrayOf(str);p["start_line"]=integer;p["returned_count"]=integer;p["next_line"]=Nullable("integer");required=new[]{"path","lines","returned_count","next_line"};
         }else if(tool=="read_image"||tool=="import_file"){
             p["mime_type"]=str;p["size_bytes"]=integer;p["preview_url"]=str;p["is_image"]=boolean;p["sha256"]=str;p["file_id"]=str;p["created"]=boolean;required=new[]{"path","mime_type","size_bytes"};
         }else if(tool=="list_directory"){
-            p["entries"]=ArrayOf(Shape(new Dictionary<string,object>{{"name",str},{"path",str},{"directory",boolean}},"name","path","directory"));p["next_offset"]=Nullable("integer");p["returned_count"]=integer;p["total_entries"]=integer;p["empty"]=boolean;required=new[]{"path","entries","next_offset"};
+            p["entries"]=ArrayOf(Shape(new Dictionary<string,object>{{"name",str},{"path",str},{"directory",boolean}},"name","path","directory"));p["kind"]=new{@enum=new[]{"roots","directory","file"}};p["info"]=Shape(new Dictionary<string,object>{{"path",str},{"name",str},{"directory",boolean},{"size_bytes",Nullable("integer")},{"last_modified_utc",str},{"created_utc",str},{"attributes",str}},"path","directory");p["next_offset"]=Nullable("integer");p["returned_count"]=integer;p["total_entries"]=integer;p["empty"]=boolean;required=new[]{"path","entries","next_offset"};
         }else if(tool=="search_files"||tool=="search_text"){
             p["matches"]=ArrayOf(Shape(new Dictionary<string,object>{{"path",str},{"line",Nullable("integer")},{"column",Nullable("integer")},{"text",str}},"path"));p["next_offset"]=Nullable("integer");p["returned_count"]=integer;p["complete"]=boolean;p["truncated"]=boolean;p["skipped_paths"]=integer;required=new[]{"path","matches","returned_count"};
         }else if(tool=="get_workspace_status"){
-            p["version"]=str;p["instance_id"]=str;p["tool_count"]=integer;p["tools"]=ArrayOf(str);p["running_commands"]=integer;p["dashboard_url"]=str;p["host_session_observed"]=boolean;required=new[]{"version","instance_id","tools","tool_count"};
+            p["version"]=str;p["instance_id"]=str;p["tool_count"]=integer;p["tools"]=ArrayOf(str);p["running_commands"]=integer;p["dashboard_url"]=str;p["host_session_observed"]=boolean;p["deprecated_tools"]=ArrayOf(str);p["commands"]=ArrayOf(Shape(new Dictionary<string,object>{{"session_id",str},{"thread_id",str},{"running",boolean},{"exit_code",Nullable("integer")}},"session_id","running"));p["workspace"]=new{anyOf=new object[]{Shape(new Dictionary<string,object>{{"activity",ArrayOf(Type("object"))},{"commands",ArrayOf(Type("object"))},{"plans",ArrayOf(Type("object"))}},"activity","commands","plans"),Type("null")}};required=new[]{"version","instance_id","tools","tool_count","commands"};
         }else if(tool=="register_conversation"){
             p["thread_id"]=str;p["title"]=str;p["chat_id"]=str;p["chat_url"]=Nullable("string");p["dashboard_url"]=str;required=new[]{"thread_id","title","path"};
         }else if(tool=="git_status"||tool=="git_diff"){

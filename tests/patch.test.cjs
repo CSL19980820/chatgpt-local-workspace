@@ -26,6 +26,13 @@ async function main(){
  const target=path.join(root,'target');fs.mkdirSync(target);const link=path.join(root,'junction');fs.symlinkSync(target,link,'junction');await bad('*** Add File: junction/blocked.txt\n+blocked');assert(!fs.existsSync(path.join(target,'blocked.txt')));fs.unlinkSync(link);
  await bad('*** Update File: moved.txt\n@@\n alpha\n-delta\n+again\n*** Update File: moved.txt\n@@\n alpha\n-delta\n+other');assert.equal(read('moved.txt'),'alpha\ndelta\n');
  await ok('*** Delete File: moved.txt');assert(!fs.existsSync(path.join(root,'moved.txt')));
+ // Dashboard detail: per-file added/removed, totals covering files beyond the 6-file list.
+ for(let i=1;i<=8;i++)fs.writeFileSync(path.join(root,'many'+i+'.txt'),'x\n');
+ await ok(Array.from({length:8},(_,i)=>'*** Update File: many'+(i+1)+'.txt\n@@\n-x\n+y\n+z').join('\n'));
+ const activity=(await request('tools/call',{name:'get_workspace_status',arguments:{}})).result.structuredContent.result.activity;
+ const many=activity.filter(a=>a.tool==='apply_patch'&&a.detail&&a.detail.count===8).pop().detail;
+ assert.equal(many.files.length,6);assert.equal(many.omitted_files,2);assert.equal(many.added,16);assert.equal(many.removed,8);assert(many.files.every(f=>f.added===2&&f.removed===1));
+ if(process.platform==='win32'){const partial=activity.filter(a=>a.tool==='apply_patch'&&a.detail&&a.detail.partial).pop().detail;assert(partial.files.length>0&&partial.files.every(f=>f.operation));assert.equal(partial.added,partial.files.reduce((n,f)=>n+f.added,0));}
  const review=await request('tools/call',{name:'show_changes',arguments:{path:root}});assert(review.result.structuredContent.result.files.some(f=>f.path.endsWith('/bom.txt')));
  assert(!fs.readdirSync(root).some(x=>x.startsWith('.patch-')));
  console.log('PASS patch add/update/move/delete, validation before mutation, ambiguity, confinement, ADS, reparse points, encoding/newlines, partial failure and review');

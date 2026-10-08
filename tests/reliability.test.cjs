@@ -15,7 +15,7 @@ function runtime(root) {
 }
 const data=r=>r.structuredContent.result;
 
-test('guarded edits, undo/redo conflicts, persistent ownership and evidence', {timeout:90000}, async t=>{
+test('guarded edits, undo/redo conflicts, persistent ownership and current-runtime evidence', {timeout:90000}, async t=>{
   const root=fs.mkdtempSync(path.join(os.tmpdir(),'workspace-reliability-')), file=path.join(root,'sample.txt');
   let app=runtime(root), browser;
   try {
@@ -35,9 +35,9 @@ test('guarded edits, undo/redo conflicts, persistent ownership and evidence', {t
     fs.writeFileSync(path.join(root,'b.txt'),'external');assert((await app.call('restore_change',{change_id:patch.change_id,apply:true})).isError);assert.equal(fs.readFileSync(path.join(root,'a.txt'),'utf8'),'A\n');
     fs.writeFileSync(path.join(root,'b.txt'),'B\n');assert(!(await app.call('restore_change',{change_id:patch.change_id,apply:true})).isError);assert.equal(fs.readFileSync(path.join(root,'a.txt'),'utf8'),'a\n');assert.equal(fs.readFileSync(path.join(root,'b.txt'),'utf8'),'b\n');
     const registered=data(await app.call('register_conversation',{path:root,title:'Durable fixture'}));
-    const evidence=await app.call('file_info',{path:file});
+    const evidence=await app.call('list_directory',{path:file});
     // A separate task isolates intentional conflict diagnostics from completion checks.
-    const proof=await app.call('file_info',{path:file},'proof');
+    const proof=await app.call('list_directory',{path:file},'proof');
     const plan=[{step:'Verify file',status:'completed',activity_ids:[proof.structuredContent.activity_id]}];
     assert(!(await app.call('update_plan',{path:root,plan},'proof')).isError);
     assert.equal(data(await app.call('check_task_completion',{path:root},'proof')).can_finish,true);
@@ -52,19 +52,30 @@ test('guarded edits, undo/redo conflicts, persistent ownership and evidence', {t
     await app.stop();app=runtime(root);await app.rpc('initialize');
     assert.equal(data(await app.call('register_conversation',{path:root,title:'Durable fixture'})).thread_id,registered.thread_id);
     assert(data(await app.call('workspace_history',{path:root})).changes.some(c=>c.id===changeId));
+    const restoredProof=data(await app.call('check_task_completion',{path:root},'proof'));
+    assert.equal(restoredProof.state,'untracked',JSON.stringify(restoredProof));
+    const freshProof=await app.call('list_directory',{path:file},'proof');
+    assert(!(await app.call('update_plan',{path:root,plan:[{step:'Verify file after restart',status:'completed',activity_ids:[freshProof.structuredContent.activity_id]}]},'proof')).isError);
     assert.equal(data(await app.call('check_task_completion',{path:root},'proof')).can_finish,true);
     assert(!(await app.call('restore_change',{change_id:changeId,apply:true})).isError);assert(fs.readFileSync(file,'utf8').startsWith('first'));
-    const scoped=data(await app.call('read_workspace_activity',{path:root}));assert(scoped.activity.some(a=>a.tool==='restore_change'),'restores belong to the workspace timeline');
+    const scoped=data(await app.call('get_workspace_status',{path:root})).workspace;assert(scoped.activity.some(a=>a.tool==='restore_change'),'restores belong to the workspace timeline');
     // Actual rendered evidence/history details against the rebuilt EXE.
     browser=(await launchDashboardBrowser()).browser;const page=await browser.newPage({viewport:{width:1000,height:740}});const errors=[];page.on('pageerror',e=>errors.push(String(e)));await page.goto(app.base());
     const snapshot=await(await fetch(app.base()+'api/snapshot')).json();assert(snapshot.activity.some(a=>a.detail?.change_id===changeId));
-    await page.getByText('文件恢复记录',{exact:true}).first().waitFor({timeout:10000});
-    await page.getByText('执行证据',{exact:true}).first().click();assert((await page.locator('#detail-body').innerText()).includes('活动 ID'));
+    // The inspector layout settles a frame or two after load/resize; re-check and retry the toggle instead of racing it.
+    const settle=()=>page.evaluate(()=>new Promise(done=>requestAnimationFrame(()=>requestAnimationFrame(done))));
+    const openInspector=async target=>{for(let attempt=0;attempt<3;attempt++){await settle();if(await target.isVisible())return;await page.locator('#inspector-toggle').click();if(await target.waitFor({state:'visible',timeout:3000}).then(()=>true,()=>false))return;}throw new Error('inspector did not open');};
+    // Below 1100px the inspector is a drawer that starts closed.
+    await page.locator('#timeline .event').first().waitFor({timeout:10000});await openInspector(page.getByText('执行证据',{exact:true}).first());
+    await page.getByText('执行证据',{exact:true}).first().waitFor({timeout:10000});
+    await page.getByText('执行证据',{exact:true}).first().click();assert((await page.locator('#detail-body').innerText()).includes('活动 ID'));assert((await page.locator('#detail-body').textContent()).includes('文件恢复记录 ID'));
     await page.setViewportSize({width:640,height:720});assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));assert((await page.locator('#detail-title').boundingBox()).height<30,'title must stay on one line');
-    await page.getByText('文件恢复记录',{exact:true}).first().click();
+    assert((await page.locator('#detail-body').textContent()).includes('文件恢复记录 ID'),'recovery record stays reachable in the narrow layout');
     if(process.env.WORKSPACE_CAPTURE_RELIABILITY==='1')await page.screenshot({path:path.join(__dirname,'../work/reliability-narrow.png')});
     await page.setViewportSize({width:1200,height:780});
     if(process.env.WORKSPACE_CAPTURE_RELIABILITY==='1')await page.screenshot({path:path.join(__dirname,'../docs/images/dashboard-reliability.png')});
+    // 1100–1279px docks the inspector but leaves it closed until toggled.
+    await openInspector(page.locator('#detail-body'));
     await app.call('edit_file',{path:file,old_text:'first',new_text:'previewed',dry_run:true});await page.getByText('预览，未修改文件',{exact:true}).waitFor();assert((await page.locator('#detail-body').innerText()).includes('previewed'));assert(fs.readFileSync(file,'utf8').startsWith('first'));assert.deepEqual(errors,[]);
   } finally {if(browser)await browser.close();await app.stop();fs.rmSync(root,{recursive:true,force:true});}
 });
@@ -91,7 +102,7 @@ test('command retries, output cursors, lost runtime reconciliation and private r
     await app.call('exec_command',{cwd:root,shell:'powershell',cmd:'Start-Sleep -Seconds 30',yield_time_ms:0},'interrupted');
     await app.stop();app=runtime(root);await app.rpc('initialize');
     assert((await app.call('exec_command',args)).isError);assert.equal(fs.readFileSync(path.join(root,'count.txt'),'utf8').trim(),'once');
-    const lost=data(await app.call('check_task_completion',{path:root},'interrupted'));assert.equal(lost.can_finish,false);assert.match(lost.last_issue,/PROCESS_RESTARTED/);
+    const lost=data(await app.call('check_task_completion',{path:root},'interrupted'));assert.equal(lost.can_finish,false);assert.equal(lost.state,'untracked');
     assert.equal(data(await app.call('show_changes',{path:repo,since:'workspace_open'})).count,2);
   } finally {await app.stop();fs.rmSync(root,{recursive:true,force:true});}
 });

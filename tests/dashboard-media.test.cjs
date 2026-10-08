@@ -49,7 +49,7 @@ test('actual MCP image receipts, workspace details and local path actions', { ti
     const snapshot = await (await fetch(base + 'api/snapshot')).json();
     const detail = snapshot.activity.find(item => item.tool === 'get_workspace_status').detail;
     assert.equal(detail.kind, 'workspace');
-    assert.equal(detail.tools.length, 28);
+    assert.equal(detail.tools.length, 23);
     assert(detail.workspaces.some(item => item.path === root.replace(/\\/g, '/')));
     assert(detail.info.some(item => item.label === '面板地址' && item.value === base));
     assert(!JSON.stringify(snapshot).includes(receipt.content[1].data));
@@ -75,15 +75,15 @@ test('actual MCP image receipts, workspace details and local path actions', { ti
     await page.getByRole('button', { name: '原始尺寸', exact: true }).click();
     assert.equal(await page.locator('.image-stage.actual-size').count(), 1);
     await page.getByRole('button', { name: '适应窗口', exact: true }).click();
-    for (const selector of ['#refresh', '#pause', '#copy-detail', '#collapse']) {
+    for (const selector of ['#more', '#pause', '#copy-detail', '#collapse']) {
       const style = await page.locator(selector).evaluate(el => ({ border: getComputedStyle(el).borderStyle, color: getComputedStyle(el).borderColor }));
       assert.equal(style.border, 'solid'); assert.equal(style.color, 'rgba(0, 0, 0, 0)');
     }
     await page.keyboard.press('Tab');
-    await page.locator('#refresh').focus();
-    assert.equal(await page.locator('#refresh').evaluate(el => getComputedStyle(el).outlineStyle), 'solid');
+    await page.locator('#more').focus();
+    assert.equal(await page.locator('#more').evaluate(el => getComputedStyle(el).outlineStyle), 'solid');
     await page.locator('#timeline .event').filter({ hasText: '工作区状态' }).click();
-    assert.match(await page.locator('#detail-body').innerText(), /28 个/);
+    assert.match(await page.locator('#detail-body').innerText(), /23 个/);
     assert.match(await page.locator('#detail-body').innerText(), /图片与工作区验收/);
     assert(await page.locator('#detail-body .path-link').count() >= 3);
     // An actual file gone missing must give useful feedback after a real browser POST.
@@ -111,6 +111,16 @@ test('actual MCP image receipts, workspace details and local path actions', { ti
       for (const width of [1440, 1000, 640]) {
         await page.setViewportSize({ width, height: 900 });
         assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth));
+        // Narrow windows show the inspector as a drawer; open it if the resize closed it.
+        // The layout settles after a resize, so re-check after two frames and retry the toggle.
+        let shown = false;
+        for (let attempt = 0; attempt < 3 && !shown; attempt++) {
+          await page.evaluate(() => new Promise(done => requestAnimationFrame(() => requestAnimationFrame(done))));
+          if (await page.locator('.image-stage img').isVisible()) { shown = true; break; }
+          await page.locator('#inspector-toggle').click();
+          shown = await page.locator('.image-stage img').waitFor({ state: 'visible', timeout: 3000 }).then(() => true, () => false);
+        }
+        assert(shown, 'image preview must be reachable at ' + width);
         const geometry = await page.locator('.image-stage img').evaluate(img => ({ width: img.getBoundingClientRect().width, parent: img.parentElement.clientWidth }));
         assert(geometry.width <= geometry.parent, 'image must fit panel at ' + width);
       }

@@ -1,0 +1,17 @@
+Local Workspace is an unofficial community project, not affiliated with OpenAI.
+
+LocalWorkspace.exe and dashboard sources: MIT, see LICENSE.LocalWorkspace.txt
+(or LICENSE in the source repository).
+
+OpenAI Tunnel Client v0.0.16: Apache-2.0.
+https://github.com/openai/tunnel-client
+The release includes LICENSE.TunnelClient.txt, THIRD-PARTY.TunnelClient.txt and
+tunnel-client.spdx.json from the verified upstream Windows amd64 archive.
+
+Microsoft WebView2 SDK 1.0.4258.31: Microsoft Software License Terms.
+The managed SDK and x64 loader are embedded in LocalWorkspace.exe.
+See LICENSE.WebView2.txt and https://www.nuget.org/packages/Microsoft.Web.WebView2.
+The separately installed shared WebView2 Runtime is not included in this ZIP.
+
+Dashboard dependencies and licenses are listed in README.md and package-lock.json.
+Development tools, Node.js and npm packages are not distributed in the release ZIP.

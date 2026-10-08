@@ -13,7 +13,54 @@ using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Text.RegularExpressions;
 
-class Settings { public string Tunnel="",Key=""; }
+[assembly:System.Reflection.AssemblyVersion(WorkspaceServer.Version+".0")]
+[assembly:System.Reflection.AssemblyFileVersion(WorkspaceServer.Version+".0")]
+
+class Settings { public string Tunnel="",Key=""; public double Zoom=1.0; }
+// Loads exact-size frames of the EXE's application icon (embedded by csc /win32icon).
+static class AppIcons
+{
+    public const int SmallIconMetric=49,IconMetric=11,IconSmall=0,IconBig=1,SetIconMessage=0x0080,DpiChangedMessage=0x02E0;
+    const uint ImageIcon=1;const int GroupIconType=14;
+    [DllImport("user32.dll",SetLastError=true)]static extern IntPtr LoadImage(IntPtr instance,IntPtr name,uint type,int cx,int cy,uint flags);
+    [DllImport("user32.dll",SetLastError=true,CharSet=CharSet.Unicode)]static extern IntPtr LoadImage(IntPtr instance,string name,uint type,int cx,int cy,uint flags);
+    [DllImport("user32.dll")]static extern bool DestroyIcon(IntPtr icon);
+    [DllImport("user32.dll")]static extern int GetSystemMetrics(int index);
+    [DllImport("user32.dll")]static extern int GetSystemMetricsForDpi(int index,uint dpi);
+    [DllImport("user32.dll")]static extern uint GetDpiForWindow(IntPtr window);
+    [DllImport("user32.dll")]static extern IntPtr SendMessage(IntPtr window,int message,IntPtr wParam,IntPtr lParam);
+    delegate bool EnumNameProc(IntPtr module,IntPtr type,IntPtr name,IntPtr param);
+    [DllImport("kernel32.dll")]static extern bool EnumResourceNames(IntPtr module,IntPtr type,EnumNameProc callback,IntPtr param);
+    static readonly object gate=new object();static bool resolved;static IntPtr module,groupId;static string groupName;
+    static void Resolve()
+    {
+        lock(gate){if(resolved)return;resolved=true;
+            try{module=Marshal.GetHINSTANCE(typeof(AppIcons).Module);if(module==IntPtr.Zero||module==new IntPtr(-1)){module=IntPtr.Zero;return;}
+                EnumResourceNames(module,new IntPtr(GroupIconType),(m,t,name,p)=>{if(((long)name>>16)==0)groupId=name;else groupName=Marshal.PtrToStringUni(name);return false;},IntPtr.Zero);
+            }catch(Exception){module=IntPtr.Zero;}}
+    }
+    // Returns an owned HICON of exactly size x size (the closest frame, scaled only if missing), or zero.
+    public static IntPtr Load(int size)
+    {
+        Resolve();if(module==IntPtr.Zero||size<=0)return IntPtr.Zero;
+        if(groupName!=null)return LoadImage(module,groupName,ImageIcon,size,size,0);
+        return groupId==IntPtr.Zero?IntPtr.Zero:LoadImage(module,groupId,ImageIcon,size,size,0);
+    }
+    public static int WindowDpi(IntPtr window)
+    {
+        try{uint dpi=GetDpiForWindow(window);if(dpi>0)return (int)dpi;}catch(EntryPointNotFoundException){}
+        return 0;
+    }
+    // dpi 0 means "unknown": fall back to the process-level metric, which is already in the
+    // process's own DPI context. A DPI-unaware window reports 96 and gets 16 / 32 px.
+    public static int Metric(int index,int dpi)
+    {
+        if(dpi>0){try{int v=GetSystemMetricsForDpi(index,(uint)dpi);if(v>0)return v;}catch(EntryPointNotFoundException){}}
+        return GetSystemMetrics(index);
+    }
+    public static void SendIcon(IntPtr window,int kind,IntPtr icon){SendMessage(window,SetIconMessage,new IntPtr(kind),icon);}
+    public static void Destroy(ref IntPtr icon){if(icon!=IntPtr.Zero){DestroyIcon(icon);icon=IntPtr.Zero;}}
+}
 class MainForm:Form
 {
     readonly string data=Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),"LocalWorkspacePlugin");
@@ -29,7 +76,7 @@ class MainForm:Form
     readonly ConcurrentQueue<string> logQueue=new ConcurrentQueue<string>();System.Windows.Forms.Timer logTimer=new System.Windows.Forms.Timer();int queued,discarded;bool discardNoted;string healthUrl;bool checking;readonly bool preview;
     string dashboardUrl,webviewAt,contextText="允许目录：全部本地磁盘    ·    OpenAI Tunnel → 本机工具";
     WorkbenchHost host;bool webviewFailed,webviewCreating,navDone;
-    readonly Icon appIcon;
+    Icon appIcon,formIcon;IntPtr iconForm,iconMark,iconSmall,iconBig;
     Settings cfg;Process client;IntPtr job;bool busy,closing;string session;CancellationTokenSource cancel;System.Windows.Forms.Timer timer=new System.Windows.Forms.Timer();
     [DllImport("kernel32.dll",CharSet=CharSet.Unicode)]static extern IntPtr CreateJobObject(IntPtr a,string n);
     [DllImport("kernel32.dll")]static extern bool SetInformationJobObject(IntPtr h,int c,IntPtr p,uint s);
@@ -42,20 +89,20 @@ class MainForm:Form
     public MainForm(bool previewOnly=false)
     {
         preview=previewOnly;if(!preview)Directory.CreateDirectory(data);string settings=Path.Combine(data,"settings.json");cfg=!preview&&File.Exists(settings)?json.Deserialize<Settings>(File.ReadAllText(settings)):new Settings();
-        if(!preview){if(!string.IsNullOrEmpty(cfg.Key)){WorkspaceCredentials.Save(cfg.Key);WorkspaceStore.AtomicWrite(settings,Encoding.UTF8.GetBytes(json.Serialize(new{Tunnel=cfg.Tunnel})));}else cfg.Key=WorkspaceCredentials.Read();}
-        appIcon=Icon.ExtractAssociatedIcon(Application.ExecutablePath);Icon=appIcon;Text="本地工作区 · "+WorkspaceServer.Version;ClientSize=new Size(1000,640);MinimumSize=new Size(820,480);Font=Theme.Body;StartPosition=FormStartPosition.CenterScreen;BackColor=Theme.Window;
+        if(!preview){if(!string.IsNullOrEmpty(cfg.Key)){WorkspaceCredentials.Save(cfg.Key);SaveSettingsFile();}else cfg.Key=WorkspaceCredentials.Read();}
+        LoadAppIcons();Text="本地工作区 · "+WorkspaceServer.Version;ClientSize=new Size(1000,640);MinimumSize=new Size(820,480);Font=Theme.Body;StartPosition=FormStartPosition.CenterScreen;BackColor=Theme.Window;
         var layout=new TableLayoutPanel{Dock=DockStyle.Fill,ColumnCount=1,RowCount=3};layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent,100));Controls.Add(layout);
-        layout.RowStyles.Add(new RowStyle(SizeType.Absolute,48));layout.RowStyles.Add(new RowStyle(SizeType.Absolute,38));layout.RowStyles.Add(new RowStyle(SizeType.Percent,100));
+        layout.RowStyles.Add(new RowStyle(SizeType.Absolute,40));layout.RowStyles.Add(new RowStyle(SizeType.Absolute,36));layout.RowStyles.Add(new RowStyle(SizeType.Percent,100));
 
         toolbar.Dock=DockStyle.Fill;toolbar.BackColor=Theme.Window;layout.Controls.Add(toolbar,0,0);
         var toolbarGrid=new TableLayoutPanel{Dock=DockStyle.Fill,ColumnCount=5,RowCount=1};
         toolbarGrid.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));toolbarGrid.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));toolbarGrid.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));toolbarGrid.ColumnStyles.Add(new ColumnStyle(SizeType.Percent,100));toolbarGrid.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
-        runToggle.Text="启动连接";runToggle.Kind=UiButton.Variant.Primary;runToggle.Margin=new Padding(16,8,8,8);
-        browserBtn.Text="在浏览器打开";browserBtn.Kind=UiButton.Variant.Secondary;browserBtn.Margin=new Padding(0,8,8,8);browserBtn.Enabled=false;
-        moreBtn.Text="更多";moreBtn.Kind=UiButton.Variant.Secondary;moreBtn.Margin=new Padding(0,8,8,8);
+        runToggle.Text="启动连接";runToggle.Kind=UiButton.Variant.Primary;runToggle.Margin=new Padding(12,4,6,4);
+        browserBtn.Text="在浏览器打开";browserBtn.Kind=UiButton.Variant.Secondary;browserBtn.Margin=new Padding(0,4,6,4);browserBtn.Enabled=false;
+        moreBtn.Text="更多";moreBtn.Kind=UiButton.Variant.Secondary;moreBtn.Margin=new Padding(0,4,6,4);
         contextLabel.Dock=DockStyle.Fill;contextLabel.Text=contextText;contextLabel.Margin=new Padding(8,0,12,0);
         contextLabel.Click+=(s,e)=>{if(!string.IsNullOrEmpty(healthUrl))OpenExternal(healthUrl+"/ui");};
-        statusPill.Value=UiStatusPill.State.Stopped;statusPill.Margin=new Padding(0,11,14,11);
+        statusPill.Value=UiStatusPill.State.Stopped;statusPill.Margin=new Padding(0,7,12,7);
         toolbarGrid.Controls.Add(runToggle,0,0);toolbarGrid.Controls.Add(browserBtn,1,0);toolbarGrid.Controls.Add(moreBtn,2,0);toolbarGrid.Controls.Add(contextLabel,3,0);toolbarGrid.Controls.Add(statusPill,4,0);
         toolbar.Controls.Add(toolbarGrid);
 
@@ -67,7 +114,7 @@ class MainForm:Form
         pageWork.Dock=pageAct.Dock=pageLog.Dock=pageCfg.Dock=DockStyle.Fill;pageAct.Visible=pageLog.Visible=pageCfg.Visible=false;
         pages.Controls.AddRange(new Control[]{pageWork,pageAct,pageLog,pageCfg});
 
-        wbHost.BackColor=Theme.Surface;
+        wbHost.BackColor=Theme.Window;
         wbEmpty.BackColor=Theme.Window;wbEmpty.Paint+=PaintEmpty;
         emptyTitle.Text="实时工作台未连接";emptyTitle.Font=Theme.BodyBold;emptyTitle.ForeColor=Theme.Text;emptyTitle.AutoSize=true;
         emptySub.Text="启动连接后，调用时间线、执行计划与命令输出会嵌入显示在这里。";emptySub.Font=Theme.Small;emptySub.ForeColor=Theme.Muted;emptySub.AutoSize=true;
@@ -118,11 +165,11 @@ class MainForm:Form
             var items=new List<UiMenuItem>{
                 new UiMenuItem{Text="刷新工作台",Click=()=>{if(host!=null)host.Reload();}},
                 new UiMenuItem{Text="诊断连接",Click=async()=>{if(dashboardUrl!=null){if(host!=null){tabs.Select(0);host.Navigate(dashboardUrl+"#diagnostics");}else OpenExternal(dashboardUrl+"#diagnostics");}else{string tunnel=tunnelInput.Text.Trim(),key=keyInput.Text.Trim();Log("正在检查连接配置…");var checks=await Task.Run(()=>WorkspaceDiagnostics.Doctor(tunnel,key));var report=new StringBuilder();foreach(var row in checks){var type=row.GetType();report.AppendLine(Convert.ToString(type.GetProperty("label").GetValue(row,null))+"："+Convert.ToString(type.GetProperty("status").GetValue(row,null))+" — "+Convert.ToString(type.GetProperty("detail").GetValue(row,null)));}MessageBox.Show(this,report.ToString(),"连接配置诊断",MessageBoxButtons.OK,MessageBoxIcon.Information);}}},
-                new UiMenuItem{Text="清空日志",Click=()=>{logView.Clear();grid.Clear();activityRows.Clear();RefreshActivity();}},
+                new UiMenuItem{Text="清空已完成日志",Click=async()=>{try{await ClearLogs();}catch(Exception ex){MessageBox.Show(this,"日志未清空："+ex.Message,"本地工作区",MessageBoxButtons.OK,MessageBoxIcon.Information);}}},
                 new UiMenuItem{Text="复制原始日志",Click=()=>{try{Clipboard.SetText(logView.Count==0?"暂无日志":logView.Text);}catch(Exception ex){Log(ex.Message);}}},
                 new UiMenuItem{Text="复制工作台链接",Click=()=>{try{if(dashboardUrl!=null)Clipboard.SetText(dashboardUrl);else Log("请先启动连接，等待工作台就绪。");}catch(Exception ex){Log(ex.Message);}}},
                 new UiMenuItem{Separator=true},
-                new UiMenuItem{Text="日志仅保存在当前窗口，退出后清空",Enabled=false}};
+                new UiMenuItem{Text="调用日志、对话列表和执行计划退出后清空",Enabled=false}};
             var menu=new UiMenuForm(items,moreBtn.PointToScreen(new Point(0,moreBtn.Height-2)));
             menu.FormClosed+=(s2,e2)=>{lastMenuClose=Environment.TickCount;};
             menu.Show(this);
@@ -160,7 +207,9 @@ class MainForm:Form
         if(appIcon!=null)g.DrawIcon(appIcon,new Rectangle(cx-20,cy-150,40,40));
     }
     void OpenExternal(string url){if(url==null)return;try{Process.Start(new ProcessStartInfo(url){UseShellExecute=true});}catch(Exception ex){Log("浏览器打开失败："+ex.Message+"，可复制工作台链接手动打开。");}}
-    void Save(){if(preview)return;cfg.Tunnel=tunnelInput.Text.Trim();cfg.Key=keyInput.Text.Trim();WorkspaceCredentials.Save(cfg.Key);WorkspaceStore.AtomicWrite(Path.Combine(data,"settings.json"),Encoding.UTF8.GetBytes(json.Serialize(new{Tunnel=cfg.Tunnel})));}
+    void Save(){if(preview)return;cfg.Tunnel=tunnelInput.Text.Trim();cfg.Key=keyInput.Text.Trim();WorkspaceCredentials.Save(cfg.Key);SaveSettingsFile();}
+    // settings.json only carries non-secret preferences; the API key lives in the credential store.
+    void SaveSettingsFile(){if(preview)return;WorkspaceStore.AtomicWrite(Path.Combine(data,"settings.json"),Encoding.UTF8.GetBytes(json.Serialize(new{Tunnel=cfg.Tunnel,Zoom=WorkbenchZoom.Clamp(cfg.Zoom)})));}
     void SetContext(string text){contextText=text;contextLabel.Text=text;contextLabel.Cursor=string.IsNullOrEmpty(healthUrl)?Cursors.Default:Cursors.Hand;}
     void ShowConfigError()
     {
@@ -186,6 +235,18 @@ class MainForm:Form
         if(discarded>0&&!discardNoted){discardNoted=true;Log("日志过快，已丢弃 "+discarded+" 条缓冲记录；原始日志有容量限制");}
     }
     void RefreshActivity(){string selected=Convert.ToString(threadFilter.SelectedItem);var list=new List<ActivityRow>();foreach(var row in activityRows)if(selected=="全部对话"||selected==null||row.ThreadLabel==selected)list.Add(row);grid.SetRows(list);}
+    async Task ClearLogs()
+    {
+        string url=dashboardUrl;
+        if(url!=null)await Task.Run(()=>{
+            var bootstrap=(HttpWebRequest)WebRequest.Create(new Uri(new Uri(url),"api/local-actions"));bootstrap.Proxy=null;bootstrap.Timeout=3000;
+            string token;using(var response=bootstrap.GetResponse())using(var reader=new StreamReader(response.GetResponseStream()))token=Convert.ToString(new JavaScriptSerializer().Deserialize<Dictionary<string,object>>(reader.ReadToEnd())["token"]);
+            var request=(HttpWebRequest)WebRequest.Create(new Uri(new Uri(url),"api/clear-logs"));request.Proxy=null;request.Timeout=3000;request.Method="POST";request.ContentLength=0;request.Headers["Origin"]=new Uri(url).GetLeftPart(UriPartial.Authority);request.Headers["X-Workspace-Token"]=token;
+            using(var response=request.GetResponse()){}
+        });
+        ClearDisplayLogs();if(host!=null)host.Reload();
+    }
+    void ClearDisplayLogs(){string line;while(logQueue.TryDequeue(out line))Interlocked.Decrement(ref queued);Interlocked.Exchange(ref discarded,0);discardNoted=false;logView.Clear();grid.Clear();activityRows.Clear();RefreshActivity();tabs.SetCount(1,"");tabs.SetCount(2,"");}
     void SetDashboardUrl(string url){if(dashboardUrl==url)return;dashboardUrl=url;tabs.Select(0);SyncWorkbench();}
     void SyncWorkbench()
     {
@@ -202,13 +263,64 @@ class MainForm:Form
         if(host!=null||webviewFailed||webviewCreating)return;webviewCreating=true;
         try{
             string folder=preview?Path.Combine(Path.GetTempPath(),"workspace-preview-webview"):Path.Combine(data,"webview2");
-            var created=await WorkbenchHost.CreateAsync(folder);
+            var created=await WorkbenchHost.CreateAsync(folder,wbHost,cfg.Zoom);
             if(IsDisposed){created.Dispose();return;}
             host=created;host.NavigationCompleted+=()=>{navDone=true;};
-            wbHost.Controls.Add(host.Control);
+            host.ZoomChanged+=z=>{cfg.Zoom=z;SaveSettingsFile();};
             webviewCreating=false;
             NavigateWorkbench();SyncWorkbench();
         }catch(Exception ex){webviewCreating=false;webviewFailed=true;Log("嵌入工作台不可用："+ex.Message);SyncWorkbench();}
+    }
+    // Window icons are loaded per size from the EXE's own icon group, so the title bar gets the
+    // hand-tuned 16/20/24 px frame and the taskbar / Alt+Tab the large frame, instead of one
+    // 32 px icon that WinForms scales down. Every handle here is owned by this form.
+    void LoadAppIcons()
+    {
+        iconForm=AppIcons.Load(SystemInformation.IconSize.Width);iconMark=AppIcons.Load(40);
+        if(iconForm!=IntPtr.Zero){formIcon=Icon.FromHandle(iconForm);Icon=formIcon;}
+        else{formIcon=Icon.ExtractAssociatedIcon(Application.ExecutablePath);Icon=formIcon;}
+        appIcon=iconMark!=IntPtr.Zero?Icon.FromHandle(iconMark):formIcon;
+    }
+    void ApplyWindowIcons()
+    {
+        int dpi=AppIcons.WindowDpi(Handle);
+        IntPtr small=AppIcons.Load(AppIcons.Metric(AppIcons.SmallIconMetric,dpi)),big=AppIcons.Load(AppIcons.Metric(AppIcons.IconMetric,dpi));
+        if(small==IntPtr.Zero||big==IntPtr.Zero){AppIcons.Destroy(ref small);AppIcons.Destroy(ref big);return;}
+        IntPtr oldSmall=iconSmall,oldBig=iconBig;iconSmall=small;iconBig=big;
+        AppIcons.SendIcon(Handle,AppIcons.IconSmall,iconSmall);AppIcons.SendIcon(Handle,AppIcons.IconBig,iconBig);
+        AppIcons.Destroy(ref oldSmall);AppIcons.Destroy(ref oldBig);
+    }
+    protected override void CreateHandle(){base.CreateHandle();ApplyWindowIcons();}
+    protected override void WndProc(ref Message m)
+    {
+        // WinForms re-sends Form.Icon (and a small copy scaled from it) on several property
+        // changes; substitute the per-size frames so the title bar never falls back to it.
+        if(m.Msg==AppIcons.SetIconMessage){IntPtr mine=m.WParam==(IntPtr)AppIcons.IconSmall?iconSmall:m.WParam==(IntPtr)AppIcons.IconBig?iconBig:IntPtr.Zero;if(mine!=IntPtr.Zero)m.LParam=mine;}
+        base.WndProc(ref m);
+        if(m.Msg==AppIcons.DpiChangedMessage)ApplyWindowIcons();
+    }
+    protected override void Dispose(bool disposing)
+    {
+        base.Dispose(disposing);
+        if(disposing){if(formIcon!=null&&iconForm==IntPtr.Zero)formIcon.Dispose();formIcon=null;appIcon=null;}
+        AppIcons.Destroy(ref iconSmall);AppIcons.Destroy(ref iconBig);AppIcons.Destroy(ref iconForm);AppIcons.Destroy(ref iconMark);
+    }
+    // Ctrl+= / Ctrl+- / Ctrl+0 zoom the embedded workbench. The WebView2 control forwards
+    // accelerator keys here because the browser's own accelerator keys are disabled.
+    protected override bool ProcessCmdKey(ref Message msg,Keys keyData)
+    {
+        if(host!=null&&tabs.Selected==0&&wbHost.Visible&&HandleZoomKey(keyData))return true;
+        return base.ProcessCmdKey(ref msg,keyData);
+    }
+    [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
+    bool HandleZoomKey(Keys keyData)
+    {
+        var mods=keyData&Keys.Modifiers;var key=keyData&Keys.KeyCode;
+        if(mods!=Keys.Control&&mods!=(Keys.Control|Keys.Shift))return false;
+        if(key==Keys.Oemplus||key==Keys.Add){host.ZoomIn();return true;}
+        if(mods==Keys.Control&&(key==Keys.OemMinus||key==Keys.Subtract)){host.ZoomOut();return true;}
+        if(mods==Keys.Control&&(key==Keys.D0||key==Keys.NumPad0)){host.ZoomReset();return true;}
+        return false;
     }
     void NavigateWorkbench(){string target=dashboardUrl??"about:blank";if(webviewAt==target)return;webviewAt=target;if(host!=null)host.Navigate(target);}
     public void WaitWorkbench(int ms){var sw=Stopwatch.StartNew();while(sw.ElapsedMilliseconds<ms&&!navDone&&!webviewFailed){Application.DoEvents();Thread.Sleep(20);}}
@@ -227,6 +339,8 @@ class MainForm:Form
             var pi=new ProcessStartInfo(exe,"run --control-plane.tunnel-id "+cfg.Tunnel+" --health.listen-addr 127.0.0.1:0 --health.url-file \""+health+"\" --log.format json --log.level info"){UseShellExecute=false,CreateNoWindow=true,RedirectStandardOutput=true,RedirectStandardError=true,WorkingDirectory=session,StandardOutputEncoding=Encoding.UTF8,StandardErrorEncoding=Encoding.UTF8};
             pi.EnvironmentVariables["CONTROL_PLANE_API_KEY"]=cfg.Key;pi.EnvironmentVariables["MCP_COMMAND"]="\""+Application.ExecutablePath.Replace('\\','/')+"\" --mcp";
             pi.EnvironmentVariables["WORKSPACE_TUNNEL_ID"]=cfg.Tunnel;pi.EnvironmentVariables["WORKSPACE_TUNNEL_HEALTH_FILE"]=health;
+            pi.EnvironmentVariables["WORKSPACE_DESKTOP_VERSION"]=WorkspaceServer.Version;pi.EnvironmentVariables["WORKSPACE_TUNNEL_VERSION"]=WorkspaceDiagnostics.TunnelVersion(exe);
+            pi.EnvironmentVariables["MCP_FORWARD_TRACE_CONTEXT"]="true";
             foreach(string name in new[]{"MCP_SERVER_URL","TUNNEL_CLIENT_CONFIG","TUNNEL_CLIENT_PROFILE","TUNNEL_CLIENT_PROFILE_FILE","CLOUDFLARED_MANAGED","CLOUDFLARED_TUNNEL_TOKEN"})pi.EnvironmentVariables.Remove(name);
             client=new Process{StartInfo=pi};client.OutputDataReceived+=(s,e)=>{if(e.Data!=null)Log(e.Data);};client.ErrorDataReceived+=(s,e)=>{if(e.Data!=null)Log(e.Data);};client.Start();if(!AssignProcessToJobObject(job,client.Handle)){client.Kill();throw new Exception("无法管理隧道进程。");}client.BeginOutputReadLine();client.BeginErrorReadLine();statusPill.Value=UiStatusPill.State.Connecting;Log("启动本地工作区工具和 OpenAI Tunnel。");
             for(int i=0;;i++){ct.ThrowIfCancellationRequested();if(client.HasExited)throw new Exception("Tunnel 启动失败。");if(File.Exists(health)){string url=File.ReadAllText(health).Trim();healthUrl=url;SetContext("允许目录：全部本地磁盘    ·    状态页："+url+"/ui");if(await Probe(url+"/readyz"))break;}if(i>90)throw new Exception("连接超时，请查看日志。");await Task.Delay(500,ct);}
